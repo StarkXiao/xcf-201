@@ -169,6 +169,51 @@ CREATE TABLE IF NOT EXISTS mood_retrospectives (
   FOREIGN KEY (mood_id) REFERENCES moods(id)
 );
 
+-- 情绪处方笺表
+CREATE TABLE IF NOT EXISTS emotion_prescriptions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  period_type VARCHAR(20) NOT NULL DEFAULT 'weekly',
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  mood_trend VARCHAR(20) NOT NULL DEFAULT 'stable',
+  avg_mood_score DECIMAL(3,2) DEFAULT 0,
+  dominant_mood VARCHAR(20),
+  mood_fluctuation DECIMAL(5,2) DEFAULT 0,
+  suggestions TEXT,
+  companion_advice TEXT,
+  room_recommendations TEXT,
+  task_recommendations TEXT,
+  highlights TEXT,
+  insights TEXT,
+  is_viewed BOOLEAN DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  UNIQUE(user_id, period_type, start_date)
+);
+
+-- 情绪阶段档案表
+CREATE TABLE IF NOT EXISTS emotion_stage_archives (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  archive_type VARCHAR(20) NOT NULL DEFAULT 'monthly',
+  period_label VARCHAR(100) NOT NULL,
+  start_date DATE NOT NULL,
+  end_date DATE NOT NULL,
+  mood_summary TEXT,
+  room_journey TEXT,
+  task_accomplishments TEXT,
+  growth_insights TEXT,
+  title VARCHAR(100),
+  total_mood_records INTEGER DEFAULT 0,
+  total_chapters_read INTEGER DEFAULT 0,
+  total_tasks_completed INTEGER DEFAULT 0,
+  avg_mood_score DECIMAL(3,2) DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  UNIQUE(user_id, archive_type, period_label)
+);
+
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_moods_user_id ON moods(user_id);
 CREATE INDEX IF NOT EXISTS idx_moods_record_date ON moods(record_date);
@@ -184,3 +229,7 @@ CREATE INDEX IF NOT EXISTS idx_user_story_history_user ON user_story_history(use
 CREATE INDEX IF NOT EXISTS idx_user_tasks_user_id ON user_tasks(user_id);
 CREATE INDEX IF NOT EXISTS idx_user_tasks_task_date ON user_tasks(task_date);
 CREATE INDEX IF NOT EXISTS idx_user_achievements_user_id ON user_achievements(user_id);
+CREATE INDEX IF NOT EXISTS idx_emotion_prescriptions_user_id ON emotion_prescriptions(user_id);
+CREATE INDEX IF NOT EXISTS idx_emotion_prescriptions_period ON emotion_prescriptions(user_id, period_type);
+CREATE INDEX IF NOT EXISTS idx_emotion_stage_archives_user_id ON emotion_stage_archives(user_id);
+CREATE INDEX IF NOT EXISTS idx_emotion_stage_archives_period ON emotion_stage_archives(user_id, archive_type);

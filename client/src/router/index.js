@@ -48,6 +48,12 @@ const routes = [
     name: 'Profile',
     component: () => import('@/views/Profile.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/prescription',
+    name: 'EmotionPrescription',
+    component: () => import('@/views/EmotionPrescription.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

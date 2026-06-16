@@ -33,10 +33,14 @@ class TaskRepository {
     const task = this.findById(taskId);
     if (!task) return null;
 
-    let taskDate = date;
+    let taskDate;
     
-    if (task.type === 'weekly') {
+    if (task.type === 'daily') {
+      taskDate = typeof date === 'string' ? date : `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
+    } else if (task.type === 'weekly') {
       taskDate = this.getWeekStartDate(new Date(date));
+    } else {
+      taskDate = this.getTaskPermanentDate(userId, taskId);
     }
 
     const stmt = db.prepare(`

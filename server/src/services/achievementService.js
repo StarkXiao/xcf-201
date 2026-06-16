@@ -283,7 +283,11 @@ class AchievementService {
       27: 'chapter_note_deep',
       28: 'chapter_note_total',
       29: 'chapter_note_total',
-      30: 'chapter_note_total'
+      30: 'chapter_note_total',
+      31: 'prescription_view',
+      32: 'prescription_view',
+      33: 'prescription_view',
+      34: 'prescription_view'
     };
     
     const taskAction = taskActionMap[task.id] || 'mood_record';

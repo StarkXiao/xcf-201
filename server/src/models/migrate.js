@@ -531,6 +531,104 @@ const migrate = db.transaction(() => {
   } else {
     console.log('⚠️  章节札记任务已存在，跳过');
   }
+
+  // 创建 emotion_prescriptions 情绪处方笺表
+  const prescriptionTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='emotion_prescriptions'").get();
+  if (!prescriptionTableExists) {
+    console.log('📝 创建 emotion_prescriptions 情绪处方笺表...');
+    db.exec(`
+      CREATE TABLE emotion_prescriptions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        period_type VARCHAR(20) NOT NULL DEFAULT 'weekly',
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        mood_trend VARCHAR(20) NOT NULL DEFAULT 'stable',
+        avg_mood_score DECIMAL(3,2) DEFAULT 0,
+        dominant_mood VARCHAR(20),
+        mood_fluctuation DECIMAL(5,2) DEFAULT 0,
+        suggestions TEXT,
+        companion_advice TEXT,
+        room_recommendations TEXT,
+        task_recommendations TEXT,
+        highlights TEXT,
+        insights TEXT,
+        is_viewed BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        UNIQUE(user_id, period_type, start_date)
+      )
+    `);
+    console.log('✅ emotion_prescriptions 表创建完成');
+  } else {
+    console.log('⚠️  emotion_prescriptions 表已存在，跳过');
+  }
+
+  // 创建 emotion_stage_archives 情绪阶段档案表
+  const archiveTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='emotion_stage_archives'").get();
+  if (!archiveTableExists) {
+    console.log('📝 创建 emotion_stage_archives 情绪阶段档案表...');
+    db.exec(`
+      CREATE TABLE emotion_stage_archives (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        archive_type VARCHAR(20) NOT NULL DEFAULT 'monthly',
+        period_label VARCHAR(100) NOT NULL,
+        start_date DATE NOT NULL,
+        end_date DATE NOT NULL,
+        mood_summary TEXT,
+        room_journey TEXT,
+        task_accomplishments TEXT,
+        growth_insights TEXT,
+        title VARCHAR(100),
+        total_mood_records INTEGER DEFAULT 0,
+        total_chapters_read INTEGER DEFAULT 0,
+        total_tasks_completed INTEGER DEFAULT 0,
+        avg_mood_score DECIMAL(3,2) DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        UNIQUE(user_id, archive_type, period_label)
+      )
+    `);
+    console.log('✅ emotion_stage_archives 表创建完成');
+  } else {
+    console.log('⚠️  emotion_stage_archives 表已存在，跳过');
+  }
+
+  // 创建情绪处方笺相关索引
+  const prescriptionIndexExists = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_emotion_prescriptions_user_id'").get();
+  if (!prescriptionIndexExists) {
+    console.log('📝 创建情绪处方笺相关索引...');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_emotion_prescriptions_user_id ON emotion_prescriptions(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_emotion_prescriptions_period ON emotion_prescriptions(user_id, period_type)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_emotion_stage_archives_user_id ON emotion_stage_archives(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_emotion_stage_archives_period ON emotion_stage_archives(user_id, archive_type)');
+    console.log('✅ 情绪处方笺索引创建完成');
+  } else {
+    console.log('⚠️  情绪处方笺索引已存在，跳过');
+  }
+
+  // 添加情绪处方笺相关任务
+  const prescriptionTaskCount = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE id IN (31, 32, 33, 34)").get().count;
+  if (prescriptionTaskCount < 4) {
+    console.log('📝 添加情绪处方笺相关任务...');
+    const insertTask = db.prepare(`
+      INSERT OR IGNORE INTO tasks (id, title, description, type, target, reward, icon, reset_type, reset_days)
+      VALUES (?, ?, ?, 'daily', ?, ?, ?, 'daily', 1)
+    `);
+    insertTask.run(31, '查看处方笺', '查看今日情绪处方笺的陪伴建议', 1, 10, 'heart-pulse');
+    
+    const insertOnceTask = db.prepare(`
+      INSERT OR IGNORE INTO tasks (id, title, description, type, target, reward, icon)
+      VALUES (?, ?, ?, 'once', ?, ?, ?)
+    `);
+    insertOnceTask.run(32, '初次问诊', '查看第一份情绪处方笺', 1, 30, 'stethoscope');
+    insertOnceTask.run(33, '心灵守护者', '累计查看 10 份情绪处方笺', 10, 80, 'shield-heart');
+    insertOnceTask.run(34, '情绪疗愈师', '累计查看 30 份情绪处方笺', 30, 200, 'sparkles');
+    console.log('✅ 情绪处方笺任务添加完成');
+  } else {
+    console.log('⚠️  情绪处方笺任务已存在，跳过');
+  }
 });
 
 try {

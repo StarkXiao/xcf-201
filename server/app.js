@@ -43,7 +43,8 @@ router.get('/', async (ctx) => {
       rooms: '/api/rooms/*',
       tasks: '/api/tasks/*',
       achievements: '/api/achievements/*',
-      profile: '/api/profile/*'
+      profile: '/api/profile/*',
+      prescriptions: '/api/prescriptions/*'
     }
   };
 });
@@ -60,6 +61,7 @@ const moodRoutes = require('./src/routes/moods');
 const roomRoutes = require('./src/routes/rooms');
 const achievementRoutes = require('./src/routes/achievements');
 const retrospectiveRoutes = require('./src/routes/retrospectives');
+const prescriptionRoutes = require('./src/routes/emotionPrescriptions');
 
 const publicRouter = new Router();
 publicRouter.get('/api/auth/login', async (ctx) => {
@@ -74,7 +76,8 @@ app.use(authMiddleware.unless({
     /^\/$/,
     /^\/api\/health$/,
     /^\/api\/auth\/login$/,
-    /^\/api\/auth\/register$/
+    /^\/api\/auth\/register$/,
+    /^\/api\/prescriptions\/config$/
   ]
 }));
 
@@ -92,6 +95,8 @@ app.use(achievementRoutes.routes());
 app.use(achievementRoutes.allowedMethods());
 app.use(retrospectiveRoutes.routes());
 app.use(retrospectiveRoutes.allowedMethods());
+app.use(prescriptionRoutes.routes());
+app.use(prescriptionRoutes.allowedMethods());
 
 app.listen(PORT, () => {
   console.log(`

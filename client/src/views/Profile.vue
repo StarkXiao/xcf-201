@@ -7,7 +7,7 @@ import { useProfileStore } from '@/stores/profile'
 import { useRoomStore } from '@/stores/room'
 import { 
   User, Calendar, Heart, DoorOpen, Trophy, LogOut, Moon, Sparkles, Target, Zap, Link, Star,
-  User as UserIcon, TrendingUp, BarChart3, Award, FileText, PenLine, BookOpen
+  User as UserIcon, TrendingUp, BarChart3, Award, FileText, PenLine, BookOpen, HeartPulse, ChevronRight
 } from 'lucide-vue-next'
 import MoodCurveChart from '@/components/MoodCurveChart.vue'
 import RoomPreference from '@/components/RoomPreference.vue'
@@ -36,6 +36,7 @@ const mainTabs = [
 
 const growthTabs = [
   { id: 'summary', label: '阶段总结', icon: FileText },
+  { id: 'prescription', label: '情绪处方笺', icon: HeartPulse },
   { id: 'mood', label: '情绪曲线', icon: Heart },
   { id: 'rooms', label: '房间偏好', icon: DoorOpen },
   { id: 'tasks', label: '任务完成', icon: Target },
@@ -304,7 +305,7 @@ onMounted(() => {
         <p class="loading-text">正在生成成长档案...</p>
       </div>
 
-      <div v-else-if="growthProfile">
+      <div v-else>
         <div class="growth-tabs glass-card">
           <div class="growth-tabs-nav">
             <button 
@@ -322,107 +323,124 @@ onMounted(() => {
 
         <div class="growth-content">
           <Transition name="fade" mode="out-in">
-            <PeriodSummary 
-              v-if="activeGrowthTab === 'summary'" 
-              :periodSummary="growthProfile.periodSummary" 
-              :key="'summary'"
-            />
-            <MoodCurveChart 
-              v-else-if="activeGrowthTab === 'mood'" 
-              :moodCurve="growthProfile.moodCurve" 
-              :key="'mood'"
-            />
-            <RoomPreference 
-              v-else-if="activeGrowthTab === 'rooms'" 
-              :roomPreference="growthProfile.roomPreference" 
-              :key="'rooms'"
-            />
-            <TaskCompletionStats 
-              v-else-if="activeGrowthTab === 'tasks'" 
-              :taskCompletion="growthProfile.taskCompletion" 
-              :key="'tasks'"
-            />
-            <AchievementTimeline 
-              v-else-if="activeGrowthTab === 'achievements'" 
-              :achievementRhythm="growthProfile.achievementRhythm" 
-              :key="'achievements'"
-            />
+            <div v-if="activeGrowthTab === 'prescription'" class="prescription-section glass-card" :key="'prescription'">
+              <div class="prescription-entry">
+                <div class="prescription-entry-icon">
+                  <HeartPulse class="icon" />
+                </div>
+                <div class="prescription-entry-content">
+                  <h3>情绪处方笺</h3>
+                  <p>根据你的情绪记录，生成专属陪伴建议与阶段成长档案</p>
+                </div>
+                <button class="entry-btn" @click="router.push('/prescription')">
+                  <span>查看详情</span>
+                  <ChevronRight class="entry-icon" />
+                </button>
+              </div>
+            </div>
             
-            <div v-else-if="activeGrowthTab === 'notes'" class="notes-section" :key="'notes'">
-              <div class="notes-stats glass-card">
-                <div class="notes-stat-item">
-                  <div class="notes-stat-icon">
-                    <PenLine class="icon" />
+            <template v-else-if="growthProfile">
+              <PeriodSummary 
+                v-if="activeGrowthTab === 'summary'" 
+                :periodSummary="growthProfile.periodSummary" 
+                :key="'summary'"
+              />
+              <MoodCurveChart 
+                v-else-if="activeGrowthTab === 'mood'" 
+                :moodCurve="growthProfile.moodCurve" 
+                :key="'mood'"
+              />
+              <RoomPreference 
+                v-else-if="activeGrowthTab === 'rooms'" 
+                :roomPreference="growthProfile.roomPreference" 
+                :key="'rooms'"
+              />
+              <TaskCompletionStats 
+                v-else-if="activeGrowthTab === 'tasks'" 
+                :taskCompletion="growthProfile.taskCompletion" 
+                :key="'tasks'"
+              />
+              <AchievementTimeline 
+                v-else-if="activeGrowthTab === 'achievements'" 
+                :achievementRhythm="growthProfile.achievementRhythm" 
+                :key="'achievements'"
+              />
+              <div v-else-if="activeGrowthTab === 'notes'" class="notes-section" :key="'notes'">
+                <div class="notes-stats glass-card">
+                  <div class="notes-stat-item">
+                    <div class="notes-stat-icon">
+                      <PenLine class="icon" />
+                    </div>
+                    <div class="notes-stat-content">
+                      <span class="stat-value">{{ growthProfile.chapterNotes?.totalCount || 0 }}</span>
+                      <span class="stat-label">札记总数</span>
+                    </div>
                   </div>
-                  <div class="notes-stat-content">
-                    <span class="stat-value">{{ growthProfile.chapterNotes?.totalCount || 0 }}</span>
-                    <span class="stat-label">札记总数</span>
+                  <div class="notes-stat-item">
+                    <div class="notes-stat-icon secondary">
+                      <BookOpen class="icon" />
+                    </div>
+                    <div class="notes-stat-content">
+                      <span class="stat-value">{{ growthProfile.chapterNotes?.daysWithNotes || 0 }}</span>
+                      <span class="stat-label">写作天数</span>
+                    </div>
+                  </div>
+                  <div class="notes-stat-item">
+                    <div class="notes-stat-icon tertiary">
+                      <FileText class="icon" />
+                    </div>
+                    <div class="notes-stat-content">
+                      <span class="stat-value">{{ growthProfile.chapterNotes?.avgContentLength || 0 }}</span>
+                      <span class="stat-label">平均字数</span>
+                    </div>
                   </div>
                 </div>
-                <div class="notes-stat-item">
-                  <div class="notes-stat-icon secondary">
-                    <BookOpen class="icon" />
+                
+                <div class="notes-list-section">
+                  <h3 class="section-title">我的札记</h3>
+                  <div v-if="roomStore.myNotes.length === 0" class="empty-notes glass-card">
+                    <PenLine class="empty-icon" />
+                    <p class="empty-title">还没有札记</p>
+                    <p class="empty-desc">读完故事章节后，写下你的感受吧~</p>
                   </div>
-                  <div class="notes-stat-content">
-                    <span class="stat-value">{{ growthProfile.chapterNotes?.daysWithNotes || 0 }}</span>
-                    <span class="stat-label">写作天数</span>
-                  </div>
-                </div>
-                <div class="notes-stat-item">
-                  <div class="notes-stat-icon tertiary">
-                    <FileText class="icon" />
-                  </div>
-                  <div class="notes-stat-content">
-                    <span class="stat-value">{{ growthProfile.chapterNotes?.avgContentLength || 0 }}</span>
-                    <span class="stat-label">平均字数</span>
-                  </div>
-                </div>
-              </div>
-              
-              <div class="notes-list-section">
-                <h3 class="section-title">我的札记</h3>
-                <div v-if="roomStore.myNotes.length === 0" class="empty-notes glass-card">
-                  <PenLine class="empty-icon" />
-                  <p class="empty-title">还没有札记</p>
-                  <p class="empty-desc">读完故事章节后，写下你的感受吧~</p>
-                </div>
-                <div v-else class="notes-list">
-                  <div 
-                    v-for="note in roomStore.myNotes" 
-                    :key="note.id"
-                    class="note-card glass-card"
-                    @click="goToRoom(note.roomId)"
-                  >
-                    <div class="note-card-header">
-                      <div class="note-chapter-info">
-                        <span class="note-room-name">{{ note.roomName }}</span>
-                        <span class="note-chapter-num">第{{ note.chapterNumber }}章</span>
+                  <div v-else class="notes-list">
+                    <div 
+                      v-for="note in roomStore.myNotes" 
+                      :key="note.id"
+                      class="note-card glass-card"
+                      @click="goToRoom(note.roomId)"
+                    >
+                      <div class="note-card-header">
+                        <div class="note-chapter-info">
+                          <span class="note-room-name">{{ note.roomName }}</span>
+                          <span class="note-chapter-num">第{{ note.chapterNumber }}章</span>
+                        </div>
+                        <span class="note-date">{{ formatNoteDate(note.createdAt) }}</span>
                       </div>
-                      <span class="note-date">{{ formatNoteDate(note.createdAt) }}</span>
-                    </div>
-                    <h4 class="note-card-title">{{ note.storyTitle }}</h4>
-                    <p class="note-card-preview">{{ note.content.slice(0, 100) }}{{ note.content.length > 100 ? '...' : '' }}</p>
-                    <div v-if="note.moodTags?.length" class="note-card-tags">
-                      <span 
-                        v-for="tag in note.moodTags" 
-                        :key="tag"
-                        class="note-card-tag"
-                      >
-                        {{ tag }}
-                      </span>
+                      <h4 class="note-card-title">{{ note.storyTitle }}</h4>
+                      <p class="note-card-preview">{{ note.content.slice(0, 100) }}{{ note.content.length > 100 ? '...' : '' }}</p>
+                      <div v-if="note.moodTags?.length" class="note-card-tags">
+                        <span 
+                          v-for="tag in note.moodTags" 
+                          :key="tag"
+                          class="note-card-tag"
+                        >
+                          {{ tag }}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
+            </template>
+            
+            <div v-else class="empty-state glass-card" :key="'empty'">
+              <Sparkles class="empty-icon" />
+              <p class="empty-title">暂无成长数据</p>
+              <p class="empty-desc">继续使用应用，记录心情、阅读故事，即可生成专属成长档案</p>
             </div>
           </Transition>
         </div>
-      </div>
-
-      <div v-else class="empty-state glass-card">
-        <Sparkles class="empty-icon" />
-        <p class="empty-title">暂无成长数据</p>
-        <p class="empty-desc">继续使用应用，记录心情、阅读故事，即可生成专属成长档案</p>
       </div>
     </div>
 
@@ -1191,6 +1209,89 @@ onMounted(() => {
   color: var(--color-secondary);
   border-radius: var(--radius-full);
   font-size: 0.75rem;
+}
+
+.prescription-section {
+  padding: 24px;
+}
+
+.prescription-entry {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+.prescription-entry-icon {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(139, 92, 246, 0.2));
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  
+  .icon {
+    width: 32px;
+    height: 32px;
+    color: var(--color-secondary);
+  }
+}
+
+.prescription-entry-content {
+  flex: 1;
+  
+  h3 {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0 0 6px 0;
+  }
+  
+  p {
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    margin: 0;
+    line-height: 1.5;
+  }
+}
+
+.entry-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 18px;
+  background: linear-gradient(135deg, var(--color-secondary), var(--color-accent));
+  color: white;
+  border: none;
+  border-radius: var(--radius-full);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(232, 180, 217, 0.3);
+  }
+}
+
+.entry-icon {
+  width: 16px;
+  height: 16px;
+}
+
+@media (max-width: 768px) {
+  .prescription-entry {
+    flex-direction: column;
+    text-align: center;
+  }
+  
+  .prescription-entry-content {
+    h3 {
+      font-size: 1.05rem;
+    }
+  }
 }
 
 @media (max-width: 768px) {

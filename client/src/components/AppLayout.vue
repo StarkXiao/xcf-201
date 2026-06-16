@@ -5,7 +5,7 @@ import { useNotificationStore } from '@/stores/notification'
 import { useMoodStore } from '@/stores/mood'
 import { useAchievementStore } from '@/stores/achievement'
 import { computed, onMounted, watch } from 'vue'
-import { Calendar, DoorOpen, Trophy, User, LogOut, Moon } from 'lucide-vue-next'
+import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse } from 'lucide-vue-next'
 import NotificationToast from './NotificationToast.vue'
 
 const route = useRoute()
@@ -17,6 +17,7 @@ const achievementStore = useAchievementStore()
 
 const navItems = [
   { path: '/calendar', name: '心情日历', icon: Calendar },
+  { path: '/prescription', name: '情绪处方笺', icon: HeartPulse },
   { path: '/rooms', name: '剧情房间', icon: DoorOpen },
   { path: '/achievements', name: '任务成就', icon: Trophy },
   { path: '/profile', name: '个人中心', icon: User }

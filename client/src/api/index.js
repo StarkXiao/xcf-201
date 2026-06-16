@@ -87,4 +87,15 @@ export const profileApi = {
   getGrowthProfile: () => api.get('/profile/growth')
 }
 
+export const prescriptionApi = {
+  getConfig: () => api.get('/prescriptions/config'),
+  getLatest: (periodType = 'weekly') => api.get('/prescriptions/latest', { params: { periodType } }),
+  getList: (periodType = 'weekly', limit = 12) => api.get('/prescriptions/list', { params: { periodType, limit } }),
+  generateWeekly: () => api.post('/prescriptions/generate/weekly'),
+  generateDaily: () => api.post('/prescriptions/generate/daily'),
+  viewPrescription: (id) => api.post(`/prescriptions/${id}/view`),
+  getArchives: (archiveType, limit = 12) => api.get('/prescriptions/archives', { params: { archiveType, limit } }),
+  generateMonthlyArchive: (year, month) => api.post('/prescriptions/archives/generate/monthly', { year, month })
+}
+
 export default api
