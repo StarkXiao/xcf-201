@@ -74,6 +74,18 @@ router.get('/achievements', async (ctx) => {
   };
 });
 
+router.get('/achievements/combo', async (ctx) => {
+  const user = getCurrentUser(ctx);
+  
+  const result = achievementService.getComboAchievements(user.userId);
+  
+  ctx.body = {
+    code: 200,
+    message: 'success',
+    data: result
+  };
+});
+
 router.get('/reminders', async (ctx) => {
   const user = getCurrentUser(ctx);
   

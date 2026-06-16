@@ -18,6 +18,117 @@ class AchievementRepository {
     return stmt.all(conditionType);
   }
 
+  getCrossRoomReadCount(userId) {
+    const stmt = db.prepare(`
+      SELECT COUNT(DISTINCT room_id) as rooms_count, 
+             COUNT(DISTINCT story_id) as chapters_count
+      FROM user_story_history
+      WHERE user_id = ?
+    `);
+    const result = stmt.get(userId);
+    return {
+      roomsCount: result.rooms_count || 0,
+      chaptersCount: result.chapters_count || 0
+    };
+  }
+
+  getSpecificMoodRecordCount(userId, moodTypes) {
+    const placeholders = moodTypes.map(() => '?').join(',');
+    const stmt = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM moods
+      WHERE user_id = ? AND mood_type IN (${placeholders})
+    `);
+    const result = stmt.get(userId, ...moodTypes);
+    return result.count || 0;
+  }
+
+  getMoodTypeRecordCount(userId) {
+    const stmt = db.prepare(`
+      SELECT mood_type, COUNT(*) as count
+      FROM moods
+      WHERE user_id = ?
+      GROUP BY mood_type
+    `);
+    const results = stmt.all(userId);
+    const countMap = {};
+    results.forEach(r => {
+      countMap[r.mood_type] = r.count;
+    });
+    return countMap;
+  }
+
+  getConsecutiveTaskClaimDays(userId) {
+    const stmt = db.prepare(`
+      SELECT DISTINCT DATE(claimed_at) as claim_date
+      FROM user_tasks
+      WHERE user_id = ? AND is_claimed = 1 AND claimed_at IS NOT NULL
+      ORDER BY claim_date DESC
+    `);
+    const dates = stmt.all(userId);
+    
+    if (dates.length === 0) return 0;
+    
+    let streak = 0;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    for (let i = 0; i < dates.length; i++) {
+      const claimDate = new Date(dates[i].claim_date);
+      claimDate.setHours(0, 0, 0, 0);
+      
+      const expectedDate = new Date(today);
+      expectedDate.setDate(expectedDate.getDate() - i);
+      expectedDate.setHours(0, 0, 0, 0);
+      
+      if (claimDate.getTime() === expectedDate.getTime()) {
+        streak++;
+      } else if (i === 0 && claimDate < expectedDate) {
+        const yesterday = new Date(today);
+        yesterday.setDate(yesterday.getDate() - 1);
+        yesterday.setHours(0, 0, 0, 0);
+        if (claimDate.getTime() === yesterday.getTime()) {
+          streak++;
+        } else {
+          break;
+        }
+      } else {
+        break;
+      }
+    }
+    
+    return streak;
+  }
+
+  getComboAchievementProgress(userId) {
+    const crossRoom = this.getCrossRoomReadCount(userId);
+    const moodCounts = this.getMoodTypeRecordCount(userId);
+    const consecutiveClaims = this.getConsecutiveTaskClaimDays(userId);
+    
+    const specificMoodTypes = ['happy', 'calm', 'sad', 'anxious', 'angry'];
+    const specificMoodTotal = specificMoodTypes.reduce((sum, type) => sum + (moodCounts[type] || 0), 0);
+    const uniqueMoodTypes = Object.keys(moodCounts).filter(k => moodCounts[k] > 0).length;
+    
+    return {
+      crossRoomRead: {
+        roomsCount: crossRoom.roomsCount,
+        chaptersCount: crossRoom.chaptersCount,
+        roomsTarget: 3,
+        chaptersTarget: 5
+      },
+      specificMoodRecord: {
+        totalRecords: specificMoodTotal,
+        uniqueMoodTypes,
+        totalTarget: 10,
+        uniqueTarget: 3
+      },
+      consecutiveTaskClaims: {
+        currentStreak: consecutiveClaims,
+        target: 3
+      }
+    };
+  }
+
   getUserAchievements(userId) {
     const stmt = db.prepare(`
       SELECT 

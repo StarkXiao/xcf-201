@@ -1,30 +1,93 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useAchievementStore } from '@/stores/achievement'
+import { useRouter } from 'vue-router'
 import { 
   Trophy, Target, Gift, CheckCircle, Clock, Star, 
   Calendar, Flame, Lock, ChevronRight, Bell, Sparkles,
-  Moon, Zap
+  Moon, Zap, Layers, BookOpen, Heart, Award, ExternalLink,
+  Home, Smile
 } from 'lucide-vue-next'
 import NotificationToast from '@/components/NotificationToast.vue'
 
 const achievementStore = useAchievementStore()
+const router = useRouter()
 
 const activeTab = ref('tasks')
 const activeTaskTab = ref('daily')
+const activeAchievementTab = ref('all')
 const showToast = ref(false)
 const toastType = ref('success')
 const toastMessage = ref('')
 const isLoading = ref(false)
 const claimingId = ref(null)
 const showReminderPanel = ref(false)
+const expandedComboId = ref(null)
 
 const tasks = computed(() => achievementStore.tasks)
 const achievements = computed(() => achievementStore.achievements)
+const comboAchievements = computed(() => achievementStore.comboAchievements)
 const unlockedCount = computed(() => achievementStore.unlockedCount)
 const totalCount = computed(() => achievementStore.totalCount)
 const reminders = computed(() => achievementStore.reminders)
 const hasUnclaimedRewards = computed(() => achievementStore.hasUnclaimedRewards)
+
+const normalAchievements = computed(() => 
+  achievements.value.filter(a => !a.isCombo)
+)
+
+function getSubConditionIcon(key) {
+  const iconMap = {
+    'crossRoomRead': BookOpen,
+    'specificMoodRecord': Heart,
+    'consecutiveTaskClaims': Gift
+  }
+  return iconMap[key] || Layers
+}
+
+function getSubConditionProgressText(sub) {
+  if (sub.key === 'crossRoomRead') {
+    return `已阅读 ${sub.progress.chapters} / ${sub.target.chapters} 章节，跨 ${sub.progress.rooms} / ${sub.target.rooms} 个房间`
+  }
+  if (sub.key === 'specificMoodRecord') {
+    return `已记录 ${sub.progress.totalRecords} / ${sub.target.totalRecords} 次，体验 ${sub.progress.uniqueTypes} / ${sub.target.uniqueTypes} 种情绪`
+  }
+  if (sub.key === 'consecutiveTaskClaims') {
+    return `连续领取 ${sub.progress.streak} / ${sub.target.streak} 天`
+  }
+  return ''
+}
+
+function getSubConditionPercent(sub) {
+  if (sub.key === 'crossRoomRead') {
+    const roomPct = (sub.progress.rooms / sub.target.rooms) * 50
+    const chapterPct = (sub.progress.chapters / sub.target.chapters) * 50
+    return Math.min(100, roomPct + chapterPct)
+  }
+  if (sub.key === 'specificMoodRecord') {
+    const totalPct = (sub.progress.totalRecords / sub.target.totalRecords) * 50
+    const uniquePct = (sub.progress.uniqueTypes / sub.target.uniqueTypes) * 50
+    return Math.min(100, totalPct + uniquePct)
+  }
+  if (sub.key === 'consecutiveTaskClaims') {
+    return Math.min(100, (sub.progress.streak / sub.target.streak) * 100)
+  }
+  return 0
+}
+
+function toggleComboExpand(id) {
+  expandedComboId.value = expandedComboId.value === id ? null : id
+}
+
+function navigateToTracker(key) {
+  if (key === 'crossRoomRead') {
+    router.push('/rooms')
+  } else if (key === 'specificMoodRecord') {
+    router.push('/mood')
+  } else if (key === 'consecutiveTaskClaims') {
+    activeTab.value = 'tasks'
+  }
+}
 
 const dailyTasks = computed(() => achievementStore.dailyTasks)
 const weeklyTasks = computed(() => achievementStore.weeklyTasks)
@@ -486,24 +549,187 @@ onMounted(() => {
             </div>
           </div>
         </div>
-        
-        <div class="achievements-grid">
+
+        <div class="achievement-tabs">
+          <button 
+            class="achievement-tab-btn" 
+            :class="{ active: activeAchievementTab === 'all' }"
+            @click="activeAchievementTab = 'all'"
+          >
+            <Award class="tab-icon" />
+            <span>全部成就</span>
+          </button>
+          <button 
+            class="achievement-tab-btn" 
+            :class="{ active: activeAchievementTab === 'combo' }"
+            @click="activeAchievementTab = 'combo'"
+          >
+            <Layers class="tab-icon" />
+            <span>组合成就</span>
+            <span v-if="comboAchievements.some(c => !c.isUnlocked)" class="tab-badge">
+              {{ comboAchievements.filter(c => !c.isUnlocked).length }}
+            </span>
+          </button>
+        </div>
+
+        <div v-show="activeAchievementTab === 'combo'" class="combo-section">
+          <div class="combo-intro glass-card">
+            <div class="combo-intro-header">
+              <Layers class="combo-intro-icon" />
+              <div>
+                <h3 class="combo-intro-title">什么是组合成就？</h3>
+                <p class="combo-intro-desc">组合成就需要同时完成多个子条件才能解锁，挑战更高，成就感更强！</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="combo-achievements-list">
+            <div 
+              v-for="combo in comboAchievements" 
+              :key="combo.id"
+              class="combo-achievement-card glass-card"
+              :class="{ 'unlocked': combo.isUnlocked, 'expanded': expandedComboId === combo.id }"
+            >
+              <div class="combo-main" @click="toggleComboExpand(combo.id)">
+                <div class="combo-icon-wrapper" :class="{ 'glow': combo.isUnlocked }">
+                  <span class="combo-icon-emoji">{{ combo.icon }}</span>
+                  <span v-if="combo.isUnlocked" class="combo-checkmark">
+                    <CheckCircle class="check-icon" />
+                  </span>
+                </div>
+                
+                <div class="combo-info">
+                  <div class="combo-header-row">
+                    <h3 class="combo-name">{{ combo.name }}</h3>
+                    <span class="combo-badge">
+                      <Layers class="badge-icon" />
+                      组合成就
+                    </span>
+                  </div>
+                  <p class="combo-desc">{{ combo.description }}</p>
+                  
+                  <div class="combo-overall-progress">
+                    <div class="progress-info">
+                      <span>总进度</span>
+                      <span>{{ combo.subConditions.filter(s => s.completed).length }} / {{ combo.subConditions.length }} 条件达成</span>
+                    </div>
+                    <div class="progress-bar-bg combo-progress-bg">
+                      <div 
+                        class="progress-bar combo-progress"
+                        :style="{ width: `${(combo.subConditions.filter(s => s.completed).length / combo.subConditions.length) * 100}%` }"
+                      ></div>
+                    </div>
+                  </div>
+                </div>
+                
+                <ChevronRight class="combo-expand-icon" :class="{ 'rotated': expandedComboId === combo.id }" />
+              </div>
+              
+              <div v-show="expandedComboId === combo.id" class="combo-details">
+                <div class="combo-sub-conditions">
+                  <div 
+                    v-for="sub in combo.subConditions" 
+                    :key="sub.key"
+                    class="sub-condition-item"
+                    :class="{ 'completed': sub.completed }"
+                  >
+                    <div class="sub-condition-header">
+                      <div class="sub-condition-icon" :class="{ 'completed': sub.completed }">
+                        <component :is="getSubConditionIcon(sub.key)" class="icon" />
+                      </div>
+                      <div class="sub-condition-info">
+                        <div class="sub-condition-title-row">
+                          <h4 class="sub-condition-name">{{ sub.name }}</h4>
+                          <CheckCircle v-if="sub.completed" class="sub-check-icon" />
+                        </div>
+                        <p class="sub-condition-desc">{{ sub.description }}</p>
+                      </div>
+                      <button 
+                        class="tracker-btn"
+                        @click.stop="navigateToTracker(sub.key)"
+                      >
+                        <ExternalLink class="tracker-icon" />
+                        <span>去追踪</span>
+                      </button>
+                    </div>
+                    
+                    <div class="sub-condition-progress">
+                      <div class="progress-info">
+                        <span>进度</span>
+                        <span>{{ getSubConditionProgressText(sub) }}</span>
+                      </div>
+                      <div class="progress-bar-bg">
+                        <div 
+                          class="progress-bar sub-progress"
+                          :class="{ 'completed': sub.completed }"
+                          :style="{ width: `${getSubConditionPercent(sub)}%` }"
+                        ></div>
+                      </div>
+                    </div>
+                    
+                    <div class="sub-condition-tips">
+                      <div v-if="sub.key === 'crossRoomRead'" class="tip-content">
+                        <BookOpen class="tip-icon" />
+                        <span>前往「房间」页面阅读不同房间的故事章节</span>
+                      </div>
+                      <div v-if="sub.key === 'specificMoodRecord'" class="tip-content">
+                        <Heart class="tip-icon" />
+                        <span>前往「心情」页面记录各种不同的心情体验</span>
+                      </div>
+                      <div v-if="sub.key === 'consecutiveTaskClaims'" class="tip-content">
+                        <Gift class="tip-icon" />
+                        <span>每天完成「任务」并领取奖励，保持连续不中断</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                
+                <div class="combo-reward-info">
+                  <Award class="reward-info-icon" />
+                  <span>解锁后将获得特殊成就徽章，记录你的全能成长之旅！</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div v-show="activeAchievementTab === 'all'" class="achievements-grid">
           <div 
             v-for="achievement in achievements" 
             :key="achievement.id"
             class="achievement-card glass-card"
-            :class="{ 'unlocked': achievement.isUnlocked }"
+            :class="{ 'unlocked': achievement.isUnlocked, 'combo-card': achievement.isCombo }"
           >
             <div class="achievement-icon" :class="{ 'glow': achievement.isUnlocked }">
               <span class="icon-emoji">{{ achievement.icon }}</span>
+              <span v-if="achievement.isCombo" class="combo-tag">
+                <Layers class="combo-tag-icon" />
+              </span>
             </div>
             
             <div class="achievement-info">
-              <h3 class="achievement-name">{{ achievement.name }}</h3>
+              <div class="achievement-name-row">
+                <h3 class="achievement-name">{{ achievement.name }}</h3>
+                <span v-if="achievement.isCombo" class="mini-combo-badge">组合</span>
+              </div>
               <p class="achievement-desc">{{ achievement.description }}</p>
               <p class="achievement-condition">{{ achievement.condition }}</p>
               
-              <div v-if="!achievement.isUnlocked" class="achievement-progress">
+              <div v-if="achievement.isCombo && !achievement.isUnlocked" class="combo-mini-progress">
+                <div class="mini-progress-dots">
+                  <span 
+                    v-for="(sub, idx) in achievement.subConditions" 
+                    :key="idx"
+                    class="mini-dot"
+                    :class="{ 'done': sub.completed }"
+                  ></span>
+                </div>
+                <span class="mini-progress-text">
+                  {{ achievement.subConditions.filter(s => s.completed).length }}/{{ achievement.subConditions.length }} 子条件
+                </span>
+              </div>
+              
+              <div v-if="!achievement.isUnlocked && !achievement.isCombo" class="achievement-progress">
                 <div class="progress-info">
                   <span>进度</span>
                   <span>{{ achievement.progress }} / {{ achievement.target }}</span>
@@ -511,7 +737,7 @@ onMounted(() => {
                 <div class="progress-bar-bg">
                   <div 
                     class="progress-bar"
-                    :style="{ width: `${(achievement.progress / achievement.target) * 100}%` }"
+                    :style="{ width: `${Math.min(100, (achievement.progress / achievement.target) * 100)}%` }"
                   ></div>
                 </div>
               </div>
@@ -1260,6 +1486,484 @@ onMounted(() => {
   color: var(--color-success);
 }
 
+.achievement-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+
+.achievement-tab-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 18px;
+  border-radius: var(--radius-full);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: var(--color-text);
+  }
+  
+  &.active {
+    background: rgba(236, 72, 153, 0.2);
+    border-color: var(--color-primary);
+    color: var(--color-primary);
+  }
+  
+  .tab-icon {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.tab-badge {
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--color-error);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.combo-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.combo-intro {
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(99, 102, 241, 0.1));
+  border: 1px solid rgba(236, 72, 153, 0.2);
+}
+
+.combo-intro-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.combo-intro-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-accent));
+  color: white;
+  padding: 10px;
+  flex-shrink: 0;
+}
+
+.combo-intro-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 4px;
+}
+
+.combo-intro-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.combo-achievements-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.combo-achievement-card {
+  padding: 0;
+  overflow: hidden;
+  transition: all var(--transition-normal);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  
+  &.unlocked {
+    border-color: rgba(232, 180, 217, 0.3);
+    background: linear-gradient(135deg, rgba(232, 180, 217, 0.05), rgba(163, 196, 243, 0.05));
+  }
+  
+  &.expanded {
+    .combo-expand-icon {
+      transform: rotate(90deg);
+    }
+  }
+}
+
+.combo-main {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 20px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.03);
+  }
+}
+
+.combo-icon-wrapper {
+  position: relative;
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  
+  &.glow {
+    background: linear-gradient(135deg, var(--color-secondary), var(--color-accent));
+    animation: glow 2s ease-in-out infinite;
+  }
+}
+
+.combo-icon-emoji {
+  font-size: 2rem;
+}
+
+.combo-checkmark {
+  position: absolute;
+  bottom: -4px;
+  right: -4px;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--color-success);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  .check-icon {
+    width: 16px;
+    height: 16px;
+    color: white;
+  }
+}
+
+.combo-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.combo-header-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.combo-name {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.combo-badge {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-full);
+  background: rgba(236, 72, 153, 0.15);
+  color: var(--color-primary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  
+  .badge-icon {
+    width: 12px;
+    height: 12px;
+  }
+}
+
+.combo-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+}
+
+.combo-overall-progress {
+  max-width: 400px;
+}
+
+.combo-progress-bg {
+  height: 8px;
+}
+
+.combo-progress {
+  background: linear-gradient(90deg, var(--color-primary), var(--color-accent), var(--color-secondary));
+}
+
+.combo-expand-icon {
+  width: 20px;
+  height: 20px;
+  color: var(--color-text-muted);
+  transition: transform var(--transition-normal);
+  flex-shrink: 0;
+}
+
+.combo-details {
+  padding: 0 20px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.combo-sub-conditions {
+  padding: 16px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.sub-condition-item {
+  padding: 16px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all var(--transition-fast);
+  
+  &.completed {
+    background: rgba(74, 222, 128, 0.05);
+    border-color: rgba(74, 222, 128, 0.2);
+  }
+}
+
+.sub-condition-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.sub-condition-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  
+  .icon {
+    width: 20px;
+    height: 20px;
+    color: var(--color-text-muted);
+  }
+  
+  &.completed {
+    background: rgba(74, 222, 128, 0.15);
+    
+    .icon {
+      color: var(--color-success);
+    }
+  }
+}
+
+.sub-condition-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.sub-condition-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.sub-condition-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.sub-check-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--color-success);
+}
+
+.sub-condition-desc {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.tracker-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border-radius: var(--radius-full);
+  background: rgba(232, 180, 217, 0.1);
+  border: 1px solid rgba(232, 180, 217, 0.2);
+  color: var(--color-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  
+  &:hover {
+    background: rgba(232, 180, 217, 0.2);
+    transform: translateX(2px);
+  }
+  
+  .tracker-icon {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+.sub-condition-progress {
+  margin-bottom: 10px;
+}
+
+.sub-progress {
+  &.completed {
+    background: linear-gradient(90deg, var(--color-success), #34d399);
+  }
+}
+
+.sub-condition-tips {
+  padding-top: 10px;
+  border-top: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.tip-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  
+  .tip-icon {
+    width: 16px;
+    height: 16px;
+    color: var(--color-secondary);
+    flex-shrink: 0;
+  }
+}
+
+.combo-reward-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: linear-gradient(135deg, rgba(251, 191, 36, 0.1), rgba(245, 158, 11, 0.1));
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  
+  .reward-info-icon {
+    width: 20px;
+    height: 20px;
+    color: var(--color-gold);
+    flex-shrink: 0;
+  }
+  
+  span {
+    font-size: 0.85rem;
+    color: var(--color-gold);
+  }
+}
+
+.achievement-name-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.mini-combo-badge {
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(236, 72, 153, 0.15);
+  color: var(--color-primary);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.achievement-card.combo-card {
+  border: 1px solid rgba(236, 72, 153, 0.15);
+  background: linear-gradient(135deg, rgba(236, 72, 153, 0.03), rgba(99, 102, 241, 0.03));
+  
+  &.unlocked {
+    border-color: rgba(232, 180, 217, 0.3);
+  }
+}
+
+.achievement-icon {
+  position: relative;
+}
+
+.combo-tag {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-primary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  .combo-tag-icon {
+    width: 14px;
+    height: 14px;
+    color: white;
+  }
+}
+
+.combo-mini-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.mini-progress-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.mini-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  transition: all var(--transition-fast);
+  
+  &.done {
+    background: var(--color-success);
+    box-shadow: 0 0 6px rgba(74, 222, 128, 0.4);
+  }
+}
+
+.mini-progress-text {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+}
+
 .reminder-panel {
   position: fixed;
   top: 0;
@@ -1465,6 +2169,38 @@ onMounted(() => {
     margin-top: 12px;
     padding-top: 12px;
     border-top: 1px solid rgba(255, 255, 255, 0.1);
+  }
+  
+  .achievement-tabs {
+    overflow-x: auto;
+    padding-bottom: 4px;
+  }
+  
+  .achievement-tab-btn {
+    white-space: nowrap;
+  }
+  
+  .combo-main {
+    flex-wrap: wrap;
+  }
+  
+  .combo-icon-wrapper {
+    width: 52px;
+    height: 52px;
+  }
+  
+  .combo-icon-emoji {
+    font-size: 1.6rem;
+  }
+  
+  .sub-condition-header {
+    flex-wrap: wrap;
+  }
+  
+  .tracker-btn {
+    width: 100%;
+    justify-content: center;
+    margin-top: 8px;
   }
   
   .reminder-panel {

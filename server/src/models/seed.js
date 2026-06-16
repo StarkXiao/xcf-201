@@ -170,7 +170,8 @@ const seedData = db.transaction(() => {
       ['房间探索者', '解锁 3 个房间', '🚪', 'rooms_unlocked', 3],
       ['梦境常客', '解锁所有房间', '🏆', 'rooms_unlocked', 6],
       ['故事达人', '阅读 10 个故事章节', '📖', 'chapters_read', 10],
-      ['完美旅人', '完成所有成就', '👑', 'all_achievements', 1]
+      ['完美旅人', '完成所有成就', '👑', 'all_achievements', 1],
+      ['全能旅人', '跨房间阅读、多元情绪记录、连续任务领取三位一体成就', '🎭', 'combo_achievement', 1]
     ];
     
     achievements.forEach(achievement => insertAchievement.run(...achievement));

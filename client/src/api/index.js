@@ -65,6 +65,7 @@ export const achievementApi = {
   updateTaskProgress: (taskType, amount) => api.post('/tasks/progress/update', { taskType, amount }),
   getTaskStats: () => api.get('/tasks/stats'),
   getAchievements: () => api.get('/achievements'),
+  getComboAchievements: () => api.get('/achievements/combo'),
   getReminders: () => api.get('/reminders')
 }
 

@@ -12,6 +12,7 @@ export const useAchievementStore = defineStore('achievement', () => {
     weeklyRefreshTime: null
   })
   const achievements = ref([])
+  const comboAchievements = ref([])
   const unlockedCount = ref(0)
   const totalCount = ref(0)
   const taskStats = ref(null)
@@ -74,11 +75,27 @@ export const useAchievementStore = defineStore('achievement', () => {
         achievements.value = response.data.achievements
         unlockedCount.value = response.data.unlockedCount
         totalCount.value = response.data.totalCount
+        if (response.data.comboAchievements) {
+          comboAchievements.value = response.data.comboAchievements
+        }
         return { success: true, data: response.data }
       }
       return { success: false, message: response.message }
     } catch (error) {
       return { success: false, message: error.response?.data?.message || '获取成就列表失败' }
+    }
+  }
+
+  async function fetchComboAchievements() {
+    try {
+      const response = await achievementApi.getComboAchievements()
+      if (response.code === 200) {
+        comboAchievements.value = response.data
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || '获取组合成就失败' }
     }
   }
 
@@ -120,6 +137,7 @@ export const useAchievementStore = defineStore('achievement', () => {
   return {
     tasks,
     achievements,
+    comboAchievements,
     unlockedCount,
     totalCount,
     taskStats,
@@ -137,6 +155,7 @@ export const useAchievementStore = defineStore('achievement', () => {
     updateTaskProgress,
     fetchTaskStats,
     fetchAchievements,
+    fetchComboAchievements,
     fetchReminders
   }
 })

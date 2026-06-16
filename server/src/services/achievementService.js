@@ -382,6 +382,7 @@ class AchievementService {
     const achievements = achievementRepository.getUserAchievements(userId);
     const unlockedCount = achievementRepository.getUnlockedCount(userId);
     const totalCount = achievementRepository.getTotalCount();
+    const comboAchievements = this.getComboAchievements(userId);
     
     const formattedAchievements = achievements.map(achievement => ({
       id: achievement.id,
@@ -389,16 +390,29 @@ class AchievementService {
       description: achievement.description,
       icon: achievement.icon,
       condition: this.getConditionText(achievement.condition_type, achievement.condition_value),
+      conditionType: achievement.condition_type,
       isUnlocked: !!achievement.is_unlocked,
       unlockedAt: achievement.unlocked_at,
       progress: achievement.progress,
-      target: achievement.condition_value
+      target: achievement.condition_value,
+      isCombo: false
     }));
     
+    const allAchievements = [...formattedAchievements, ...comboAchievements.map(a => ({
+      ...a,
+      id: a.id,
+      condition: a.conditionText,
+      isCombo: true
+    }))];
+    
+    const totalUnlocked = unlockedCount + comboAchievements.filter(a => a.isUnlocked).length;
+    const totalAll = totalCount + comboAchievements.length;
+    
     return {
-      achievements: formattedAchievements,
-      unlockedCount,
-      totalCount
+      achievements: allAchievements,
+      unlockedCount: totalUnlocked,
+      totalCount: totalAll,
+      comboAchievements
     };
   }
 
@@ -417,10 +431,88 @@ class AchievementService {
       'daily_tasks_completed': `完成 ${conditionValue} 个每日任务`,
       'weekly_tasks_completed': `完成 ${conditionValue} 个周任务`,
       'star_coins_earned': `累计获得 ${conditionValue} 星币`,
-      'all_tasks_completed': '完成所有类型任务'
+      'all_tasks_completed': '完成所有类型任务',
+      'cross_room_read': `跨房间阅读 ${conditionValue} 个故事章节`,
+      'specific_mood_records': `指定情绪记录 ${conditionValue} 次`,
+      'consecutive_task_claims': `连续 ${conditionValue} 天领取任务奖励`,
+      'combo_achievement': '完成所有组合条件'
     };
     
     return conditionMap[conditionType] || `${conditionType} ${conditionValue}`;
+  }
+
+  getComboAchievements(userId) {
+    const progress = achievementRepository.getComboAchievementProgress(userId);
+    
+    const crossRoomCompleted = progress.crossRoomRead.roomsCount >= progress.crossRoomRead.roomsTarget &&
+                               progress.crossRoomRead.chaptersCount >= progress.crossRoomRead.chaptersTarget;
+    const moodCompleted = progress.specificMoodRecord.totalRecords >= progress.specificMoodRecord.totalTarget &&
+                          progress.specificMoodRecord.uniqueMoodTypes >= progress.specificMoodRecord.uniqueTarget;
+    const claimCompleted = progress.consecutiveTaskClaims.currentStreak >= progress.consecutiveTaskClaims.target;
+    
+    const allCompleted = crossRoomCompleted && moodCompleted && claimCompleted;
+    
+    if (allCompleted) {
+      achievementRepository.checkAndUnlock(userId, 'combo_achievement', 1);
+    }
+    
+    const comboAchievements = [
+      {
+        id: 'combo_master',
+        name: '全能旅人',
+        description: '跨房间阅读、记录多元情绪、连续领取任务，三位一体的成长见证',
+        icon: '🎭',
+        conditionType: 'combo_achievement',
+        conditionText: '同时完成：跨房间阅读、指定情绪记录、连续任务领取',
+        isUnlocked: allCompleted,
+        progress: allCompleted ? 1 : 0,
+        target: 1,
+        subConditions: [
+          {
+            key: 'crossRoomRead',
+            name: '跨房间阅读',
+            description: '在多个不同房间中阅读故事章节',
+            progress: {
+              rooms: progress.crossRoomRead.roomsCount,
+              chapters: progress.crossRoomRead.chaptersCount
+            },
+            target: {
+              rooms: progress.crossRoomRead.roomsTarget,
+              chapters: progress.crossRoomRead.chaptersTarget
+            },
+            completed: crossRoomCompleted
+          },
+          {
+            key: 'specificMoodRecord',
+            name: '指定情绪记录',
+            description: '记录不同类型的心情，体验丰富情感',
+            progress: {
+              totalRecords: progress.specificMoodRecord.totalRecords,
+              uniqueTypes: progress.specificMoodRecord.uniqueMoodTypes
+            },
+            target: {
+              totalRecords: progress.specificMoodRecord.totalTarget,
+              uniqueTypes: progress.specificMoodRecord.uniqueTarget
+            },
+            completed: moodCompleted
+          },
+          {
+            key: 'consecutiveTaskClaims',
+            name: '连续任务领取',
+            description: '每天完成并领取任务奖励，保持行动力',
+            progress: {
+              streak: progress.consecutiveTaskClaims.currentStreak
+            },
+            target: {
+              streak: progress.consecutiveTaskClaims.target
+            },
+            completed: claimCompleted
+          }
+        ]
+      }
+    ];
+    
+    return comboAchievements;
   }
 
   getReminders(userId) {
