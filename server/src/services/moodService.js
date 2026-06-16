@@ -2,7 +2,7 @@ const moodRepository = require('../repositories/moodRepository');
 const userRepository = require('../repositories/userRepository');
 const roomRepository = require('../repositories/roomRepository');
 const achievementRepository = require('../repositories/achievementRepository');
-const taskRepository = require('../repositories/taskRepository');
+const achievementService = require('./achievementService');
 
 const VALID_MOOD_TYPES = ['happy', 'calm', 'sad', 'anxious', 'angry'];
 const VALID_SEGMENTS = ['morning', 'afternoon', 'evening', 'day'];
@@ -55,8 +55,6 @@ class MoodService {
     const daySegments = moodRepository.findByDate(userId, date);
     const segmentCount = daySegments.length;
     
-    taskRepository.updateProgress(userId, 1, todayStr, segmentCount > 0 ? 1 : 0);
-    
     let totalContentLength = 0;
     let totalTagWeight = 0;
     daySegments.forEach(seg => {
@@ -66,32 +64,34 @@ class MoodService {
       }
     });
     
+    const mainSegments = daySegments.filter(s => ['morning', 'afternoon', 'evening'].includes(s.time_segment));
+    const streakDays = moodRepository.getStreakDays(userId);
+    const moodTypes = moodRepository.getMoodTypes(userId);
+    const multiSegmentDays = moodRepository.getMultiSegmentDaysCount(userId);
+    
+    const taskUpdates = [];
+    
+    const moodRecordResult = achievementService.updateTaskProgress(userId, 'mood_record', 1);
+    taskUpdates.push(...moodRecordResult.newlyCompleted);
+    
     if (totalContentLength >= 50) {
-      taskRepository.updateProgress(userId, 2, todayStr, 1);
+      const contentResult = achievementService.updateTaskProgress(userId, 'mood_content', 1);
+      taskUpdates.push(...contentResult.newlyCompleted);
     }
     
-    const mainSegments = daySegments.filter(s => ['morning', 'afternoon', 'evening'].includes(s.time_segment));
     if (mainSegments.length >= 3) {
-      taskRepository.updateProgress(userId, 6, todayStr, 3);
+      const multiSegResult = achievementService.updateTaskProgress(userId, 'mood_multi_segment', 1);
+      taskUpdates.push(...multiSegResult.newlyCompleted);
     }
     
     if (totalTagWeight >= 10) {
-      taskRepository.updateProgress(userId, 7, todayStr, Math.min(totalTagWeight, 10));
+      const tagWeightResult = achievementService.updateTaskProgress(userId, 'mood_tag_weight', 1);
+      taskUpdates.push(...tagWeightResult.newlyCompleted);
     }
     
-    const streakDays = moodRepository.getStreakDays(userId);
-    if (streakDays >= 7) {
-      taskRepository.updateProgress(userId, 3, todayStr, 7);
-    }
-    
-    const moodTypes = moodRepository.getMoodTypes(userId);
     if (moodTypes.length >= 5) {
-      taskRepository.updateProgress(userId, 4, todayStr, 5);
-    }
-    
-    const multiSegmentDays = moodRepository.getMultiSegmentDaysCount(userId);
-    if (multiSegmentDays >= 7) {
-      taskRepository.updateProgress(userId, 8, todayStr, 7);
+      const varietyResult = achievementService.updateTaskProgress(userId, 'mood_variety', 1);
+      taskUpdates.push(...varietyResult.newlyCompleted);
     }
     
     const newlyUnlockedAchievements = [];
@@ -127,6 +127,7 @@ class MoodService {
       dayAggregate: moodRepository.getDayAggregate(userId, date),
       newlyUnlockedAchievements: newlyUnlockedAchievements.filter(a => a),
       newlyUnlockedRooms: unlockedRooms,
+      newlyCompletedTasks: taskUpdates,
       stats: moodRepository.getStats(userId, recordDate.getFullYear(), recordDate.getMonth() + 1)
     };
   }

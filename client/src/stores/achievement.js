@@ -1,12 +1,21 @@
 import { defineStore } from 'pinia'
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { achievementApi } from '@/api'
 
 export const useAchievementStore = defineStore('achievement', () => {
-  const tasks = ref({ dailyTasks: [], onceTasks: [], refreshTime: null })
+  const tasks = ref({
+    dailyTasks: [],
+    weeklyTasks: [],
+    onceTasks: [],
+    chainTasks: [],
+    dailyRefreshTime: null,
+    weeklyRefreshTime: null
+  })
   const achievements = ref([])
   const unlockedCount = ref(0)
   const totalCount = ref(0)
+  const taskStats = ref(null)
+  const reminders = ref([])
 
   async function fetchTasks() {
     try {
@@ -33,6 +42,31 @@ export const useAchievementStore = defineStore('achievement', () => {
     }
   }
 
+  async function updateTaskProgress(taskType, amount = 1) {
+    try {
+      const response = await achievementApi.updateTaskProgress(taskType, amount)
+      if (response.code === 200) {
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || '更新任务进度失败' }
+    }
+  }
+
+  async function fetchTaskStats() {
+    try {
+      const response = await achievementApi.getTaskStats()
+      if (response.code === 200) {
+        taskStats.value = response.data
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || '获取任务统计失败' }
+    }
+  }
+
   async function fetchAchievements() {
     try {
       const response = await achievementApi.getAchievements()
@@ -48,13 +82,61 @@ export const useAchievementStore = defineStore('achievement', () => {
     }
   }
 
+  async function fetchReminders() {
+    try {
+      const response = await achievementApi.getReminders()
+      if (response.code === 200) {
+        reminders.value = response.data
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || '获取提醒失败' }
+    }
+  }
+
+  const dailyTasks = computed(() => tasks.value?.dailyTasks || [])
+  const weeklyTasks = computed(() => tasks.value?.weeklyTasks || [])
+  const onceTasks = computed(() => tasks.value?.onceTasks || [])
+  const chainTasks = computed(() => tasks.value?.chainTasks || [])
+
+  const dailyRefreshTime = computed(() => tasks.value?.dailyRefreshTime)
+  const weeklyRefreshTime = computed(() => tasks.value?.weeklyRefreshTime)
+
+  const hasUnclaimedRewards = computed(() => {
+    const allTasks = [
+      ...(tasks.value?.dailyTasks || []),
+      ...(tasks.value?.weeklyTasks || []),
+      ...(tasks.value?.onceTasks || [])
+    ]
+    const chainTaskList = (tasks.value?.chainTasks || []).flatMap(g => g.tasks || [])
+    return [...allTasks, ...chainTaskList].some(t => t.isCompleted && !t.isClaimed)
+  })
+
+  const highPriorityReminders = computed(() => 
+    reminders.value.filter(r => r.priority === 'high')
+  )
+
   return {
     tasks,
     achievements,
     unlockedCount,
     totalCount,
+    taskStats,
+    reminders,
+    dailyTasks,
+    weeklyTasks,
+    onceTasks,
+    chainTasks,
+    dailyRefreshTime,
+    weeklyRefreshTime,
+    hasUnclaimedRewards,
+    highPriorityReminders,
     fetchTasks,
     claimTask,
-    fetchAchievements
+    updateTaskProgress,
+    fetchTaskStats,
+    fetchAchievements,
+    fetchReminders
   }
 })

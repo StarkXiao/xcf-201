@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { User, Calendar, Heart, DoorOpen, Trophy, LogOut, Moon, Sparkles } from 'lucide-vue-next'
+import { User, Calendar, Heart, DoorOpen, Trophy, LogOut, Moon, Sparkles, Target, Zap, Link, Star } from 'lucide-vue-next'
 import NotificationToast from '@/components/NotificationToast.vue'
 
 const router = useRouter()
@@ -135,6 +135,51 @@ onMounted(() => {
             <div class="stat-content">
               <span class="stat-value">{{ profile?.unlockedAchievements || 0 }}</span>
               <span class="stat-label">已获得成就</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="stats-section">
+        <h3 class="section-title">任务统计</h3>
+        <div class="stats-grid">
+          <div class="stat-card glass-card">
+            <div class="stat-icon-wrapper daily-task">
+              <Target class="stat-icon" />
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ profile?.taskStats?.dailyCompleted || 0 }}</span>
+              <span class="stat-label">每日任务完成</span>
+            </div>
+          </div>
+
+          <div class="stat-card glass-card">
+            <div class="stat-icon-wrapper weekly-task">
+              <Zap class="stat-icon" />
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ profile?.taskStats?.weeklyCompleted || 0 }}</span>
+              <span class="stat-label">周任务完成</span>
+            </div>
+          </div>
+
+          <div class="stat-card glass-card">
+            <div class="stat-icon-wrapper chain-task">
+              <Link class="stat-icon" />
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ profile?.taskStats?.chainCompleted || 0 }}</span>
+              <span class="stat-label">连锁任务完成</span>
+            </div>
+          </div>
+
+          <div class="stat-card glass-card">
+            <div class="stat-icon-wrapper coin">
+              <Star class="stat-icon" />
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ profile?.taskStats?.totalClaimed || 0 }}</span>
+              <span class="stat-label">累计星币</span>
             </div>
           </div>
         </div>
@@ -399,6 +444,26 @@ onMounted(() => {
   &.achievement {
     background: rgba(251, 191, 36, 0.15);
     .stat-icon { color: var(--color-gold); }
+  }
+
+  &.daily-task {
+    background: rgba(34, 197, 94, 0.15);
+    .stat-icon { color: #22c55e; }
+  }
+
+  &.weekly-task {
+    background: rgba(168, 85, 247, 0.15);
+    .stat-icon { color: #a855f7; }
+  }
+
+  &.chain-task {
+    background: rgba(249, 115, 22, 0.15);
+    .stat-icon { color: #f97316; }
+  }
+
+  &.coin {
+    background: rgba(234, 179, 8, 0.15);
+    .stat-icon { color: #eab308; }
   }
 }
 

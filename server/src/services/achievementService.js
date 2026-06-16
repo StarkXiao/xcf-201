@@ -1,46 +1,159 @@
 const taskRepository = require('../repositories/taskRepository');
 const achievementRepository = require('../repositories/achievementRepository');
+const userRepository = require('../repositories/userRepository');
 
 class AchievementService {
   getTasks(userId) {
     const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     
-    const dailyTasks = taskRepository.getUserTasksByDate(userId, todayStr);
+    this.checkAndResetTasks(userId, today);
+    
+    const dailyTasks = taskRepository.getUserDailyTasks(userId, today);
+    const weeklyTasks = taskRepository.getUserWeeklyTasks(userId, today);
     const onceTasks = taskRepository.getUserOnceTasks(userId);
+    const chainTasks = this.getChainTasksWithStatus(userId);
     
-    const refreshTime = new Date(today);
-    refreshTime.setHours(24, 0, 0, 0);
+    const dailyRefreshTime = new Date(today);
+    dailyRefreshTime.setHours(24, 0, 0, 0);
     
-    const formattedDailyTasks = dailyTasks.map(task => ({
-      id: task.id,
-      title: task.title,
-      description: task.description,
-      type: task.type,
-      target: task.target,
-      current: task.current_progress || 0,
-      reward: task.reward,
-      isCompleted: !!task.is_completed,
-      isClaimed: !!task.is_claimed
-    }));
+    const weeklyRefreshTime = this.getNextWeeklyRefreshTime(today);
     
-    const formattedOnceTasks = onceTasks.map(task => ({
-      id: task.id,
-      title: task.title,
-      description: task.description,
-      type: task.type,
-      target: task.target,
-      current: task.current_progress || 0,
-      reward: task.reward,
-      isCompleted: !!task.is_completed,
-      isClaimed: !!task.is_claimed
-    }));
+    const formattedDailyTasks = dailyTasks.map(task => this.formatTask(task));
+    const formattedWeeklyTasks = weeklyTasks.map(task => this.formatTask(task));
+    const formattedOnceTasks = onceTasks.map(task => this.formatTask(task));
+    
+    const chainGroups = this.groupChainTasks(chainTasks);
     
     return {
       dailyTasks: formattedDailyTasks,
+      weeklyTasks: formattedWeeklyTasks,
       onceTasks: formattedOnceTasks,
-      refreshTime: refreshTime.toISOString()
+      chainTasks: chainGroups,
+      dailyRefreshTime: dailyRefreshTime.toISOString(),
+      weeklyRefreshTime: weeklyRefreshTime.toISOString()
     };
+  }
+
+  getChainTasksWithStatus(userId) {
+    const allChainTasks = taskRepository.getUserChainTasks(userId);
+    const chainGroups = {};
+    
+    allChainTasks.forEach(task => {
+      if (!chainGroups[task.chain_id]) {
+        chainGroups[task.chain_id] = [];
+      }
+      chainGroups[task.chain_id].push(task);
+    });
+    
+    const result = [];
+    
+    for (const chainId in chainGroups) {
+      const tasks = chainGroups[chainId].sort((a, b) => a.chain_order - b.chain_order);
+      let prevCompleted = true;
+      let hasReset = false;
+      
+      const processedTasks = tasks.map(task => {
+        const isUnlocked = prevCompleted;
+        
+        if (task.reset_type === 'streak' && prevCompleted && task.is_completed) {
+          const resetResult = taskRepository.checkAndResetStreakTask(userId, task.id);
+          if (resetResult.reset) {
+            hasReset = true;
+            task.current_progress = 0;
+            task.is_completed = 0;
+            task.is_claimed = 0;
+          }
+        }
+        
+        if (task.is_completed) {
+          prevCompleted = true;
+        } else {
+          prevCompleted = false;
+        }
+        
+        return {
+          id: task.id,
+          title: task.title,
+          description: task.description,
+          type: task.type,
+          target: task.target,
+          current: task.current_progress || 0,
+          reward: task.reward,
+          icon: task.icon || 'gift',
+          chainId: task.chain_id,
+          chainOrder: task.chain_order,
+          resetType: task.reset_type,
+          resetDays: task.reset_days,
+          isCompleted: !!task.is_completed,
+          isClaimed: !!task.is_claimed,
+          isUnlocked
+        };
+      });
+      
+      result.push({
+        chainId: parseInt(chainId),
+        chainName: this.getChainName(chainId),
+        tasks: processedTasks,
+        hasReset
+      });
+    }
+    
+    return result;
+  }
+
+  getChainName(chainId) {
+    const chainNames = {
+      1: '心情成长链'
+    };
+    return chainNames[chainId] || `任务链 ${chainId}`;
+  }
+
+  groupChainTasks(chainGroups) {
+    return chainGroups;
+  }
+
+  formatTask(task) {
+    return {
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      type: task.type,
+      target: task.target,
+      current: task.current_progress || 0,
+      reward: task.reward,
+      icon: task.icon || 'gift',
+      chainId: task.chain_id || null,
+      chainOrder: task.chain_order || 0,
+      resetType: task.reset_type || 'none',
+      resetDays: task.reset_days || 0,
+      isCompleted: !!task.is_completed,
+      isClaimed: !!task.is_claimed
+    };
+  }
+
+  getNextWeeklyRefreshTime(date = new Date()) {
+    const d = new Date(date);
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1) + 7;
+    const nextMonday = new Date(d.setDate(diff));
+    nextMonday.setHours(0, 0, 0, 0);
+    return nextMonday;
+  }
+
+  checkAndResetTasks(userId, date = new Date()) {
+    const chainTasks = taskRepository.getUserChainTasks(userId);
+    const resets = [];
+    
+    chainTasks.forEach(task => {
+      if (task.reset_type === 'streak') {
+        const result = taskRepository.checkAndResetStreakTask(userId, task.id, date);
+        if (result.reset) {
+          resets.push({ taskId: task.id, ...result });
+        }
+      }
+    });
+    
+    return resets;
   }
 
   claimTaskReward(userId, taskId) {
@@ -50,23 +163,218 @@ class AchievementService {
     }
     
     const today = new Date();
-    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     
-    const userTask = taskRepository.getUserTask(userId, taskId, todayStr);
+    const success = taskRepository.claimReward(userId, taskId, today);
     
-    if (!userTask || !userTask.is_completed) {
-      throw new Error('任务尚未完成');
+    if (!success) {
+      const userTask = taskRepository.getUserTask(userId, taskId, today);
+      if (!userTask) {
+        throw new Error('任务尚未完成');
+      }
+      if (userTask.is_claimed) {
+        throw new Error('奖励已领取');
+      }
+      throw new Error('奖励领取失败');
     }
     
-    if (userTask.is_claimed) {
-      throw new Error('奖励已领取');
-    }
-    
-    const success = taskRepository.claimReward(userId, taskId, todayStr);
+    this.updateTaskAchievements(userId);
     
     return {
-      success,
-      reward: task.reward
+      success: true,
+      reward: task.reward,
+      taskId
+    };
+  }
+
+  updateTaskProgress(userId, taskType, amount = 1) {
+    const today = new Date();
+    const updates = [];
+    const newlyCompleted = [];
+    
+    const dailyTasks = taskRepository.getUserDailyTasks(userId, today);
+    dailyTasks.forEach(task => {
+      if (this.shouldUpdateTask(task, taskType)) {
+        const result = taskRepository.incrementProgress(userId, task.id, amount, today);
+        if (result) {
+          updates.push({ taskId: task.id, type: 'daily', current: result.current_progress });
+          if (result.is_completed) {
+            newlyCompleted.push({
+              taskId: task.id,
+              title: task.title,
+              reward: task.reward,
+              type: 'daily'
+            });
+          }
+        }
+      }
+    });
+    
+    const weeklyTasks = taskRepository.getUserWeeklyTasks(userId, today);
+    weeklyTasks.forEach(task => {
+      if (this.shouldUpdateTask(task, taskType)) {
+        const result = taskRepository.incrementProgress(userId, task.id, amount, today);
+        if (result) {
+          updates.push({ taskId: task.id, type: 'weekly', current: result.current_progress });
+          if (result.is_completed) {
+            newlyCompleted.push({
+              taskId: task.id,
+              title: task.title,
+              reward: task.reward,
+              type: 'weekly'
+            });
+          }
+        }
+      }
+    });
+    
+    const onceTasks = taskRepository.getUserOnceTasks(userId);
+    onceTasks.forEach(task => {
+      if (this.shouldUpdateTask(task, taskType) && !task.is_completed) {
+        const result = taskRepository.incrementProgress(userId, task.id, amount, today);
+        if (result) {
+          updates.push({ taskId: task.id, type: 'once', current: result.current_progress });
+          if (result.is_completed) {
+            newlyCompleted.push({
+              taskId: task.id,
+              title: task.title,
+              reward: task.reward,
+              type: 'once'
+            });
+          }
+        }
+      }
+    });
+    
+    if (taskType === 'mood_record') {
+      const chainUpdates = this.updateChainTaskProgress(userId);
+      updates.push(...chainUpdates.updates);
+      newlyCompleted.push(...chainUpdates.newlyCompleted);
+    }
+    
+    if (newlyCompleted.length > 0) {
+      this.updateTaskAchievements(userId);
+    }
+    
+    return {
+      updates,
+      newlyCompleted
+    };
+  }
+
+  shouldUpdateTask(task, actionType) {
+    const taskActionMap = {
+      1: 'mood_record',
+      2: 'mood_content',
+      3: 'mood_record',
+      4: 'mood_variety',
+      5: 'story_read',
+      6: 'mood_multi_segment',
+      7: 'mood_tag_weight',
+      8: 'mood_multi_segment'
+    };
+    
+    const taskAction = taskActionMap[task.id] || 'mood_record';
+    return taskAction === actionType;
+  }
+
+  updateChainTaskProgress(userId) {
+    const updates = [];
+    const newlyCompleted = [];
+    
+    const chainGroups = this.getChainTasksWithStatus(userId);
+    
+    chainGroups.forEach(group => {
+      group.tasks.forEach(task => {
+        if (task.isUnlocked && !task.isCompleted) {
+          const streak = this.getCheckInStreak(userId);
+          const result = taskRepository.updateProgress(userId, task.id, streak);
+          
+          if (result) {
+            updates.push({ taskId: task.id, type: 'chain', current: result.current_progress });
+            if (result.is_completed) {
+              newlyCompleted.push({
+                taskId: task.id,
+                title: task.title,
+                reward: task.reward,
+                type: 'chain'
+              });
+            }
+          }
+        }
+      });
+    });
+    
+    return { updates, newlyCompleted };
+  }
+
+  getCheckInStreak(userId) {
+    const moodRepository = require('../repositories/moodRepository');
+    const dates = moodRepository.getUniqueDates(userId);
+    
+    if (!dates || dates.length === 0) return 0;
+    
+    let streak = 0;
+    let currentDate = new Date();
+    currentDate.setHours(0, 0, 0, 0);
+    
+    for (let i = 0; i < 365; i++) {
+      const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
+      
+      const hasRecord = dates.some(d => {
+        const d = new Date(d.record_date || d);
+        const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        return dStr === dateStr;
+      });
+      
+      if (hasRecord) {
+        streak++;
+        currentDate.setDate(currentDate.getDate() - 1);
+      } else {
+        if (i === 0) {
+          currentDate.setDate(currentDate.getDate() - 1);
+          continue;
+        }
+        break;
+      }
+    }
+    
+    return streak;
+  }
+
+  updateTaskAchievements(userId) {
+    const totalClaimed = taskRepository.getClaimedRewardsTotal(userId);
+    achievementRepository.checkAndUnlock(userId, 'star_coins_earned', totalClaimed);
+    
+    const completedDaily = taskRepository.getCompletedTaskCountByType(userId, 'daily');
+    achievementRepository.checkAndUnlock(userId, 'daily_tasks_completed', completedDaily);
+    
+    const completedOnce = taskRepository.getCompletedTaskCountByType(userId, 'once');
+    achievementRepository.checkAndUnlock(userId, 'once_tasks_completed', completedOnce);
+    
+    const allTasks = taskRepository.findAll();
+    const totalTasks = allTasks.length;
+    const completedCount = taskRepository.getCompletedTaskCountByType(userId, 'daily') + 
+                          taskRepository.getCompletedTaskCountByType(userId, 'once') +
+                          taskRepository.getCompletedTaskCountByType(userId, 'weekly') +
+                          taskRepository.getCompletedTaskCountByType(userId, 'chain');
+    
+    achievementRepository.checkAndUnlock(userId, 'all_tasks_completed', completedCount >= totalTasks ? 1 : 0);
+  }
+
+  getTaskStats(userId) {
+    const dailyCompleted = taskRepository.getCompletedTaskCountByType(userId, 'daily');
+    const weeklyCompleted = taskRepository.getCompletedTaskCountByType(userId, 'weekly');
+    const onceCompleted = taskRepository.getCompletedTaskCountByType(userId, 'once');
+    const chainCompleted = taskRepository.getCompletedTaskCountByType(userId, 'chain');
+    const totalClaimed = taskRepository.getClaimedRewardsTotal(userId);
+    
+    return {
+      dailyCompleted,
+      weeklyCompleted,
+      onceCompleted,
+      chainCompleted,
+      totalCompleted: dailyCompleted + weeklyCompleted + onceCompleted + chainCompleted,
+      totalClaimed
     };
   }
 
@@ -105,10 +413,62 @@ class AchievementService {
       'afternoon_records': `完成 ${conditionValue} 次下午时段心情记录`,
       'evening_records': `完成 ${conditionValue} 次晚间时段心情记录`,
       'multi_segment_streak': `连续 ${conditionValue} 天完成三段心情记录`,
-      'tag_weight_count': `累计设置 ${conditionValue} 个标签权重`
+      'tag_weight_count': `累计设置 ${conditionValue} 个标签权重`,
+      'daily_tasks_completed': `完成 ${conditionValue} 个每日任务`,
+      'weekly_tasks_completed': `完成 ${conditionValue} 个周任务`,
+      'star_coins_earned': `累计获得 ${conditionValue} 星币`,
+      'all_tasks_completed': '完成所有类型任务'
     };
     
     return conditionMap[conditionType] || `${conditionType} ${conditionValue}`;
+  }
+
+  getReminders(userId) {
+    const today = new Date();
+    const reminders = [];
+    
+    const dailyTasks = taskRepository.getUserDailyTasks(userId, today);
+    const uncompletedDaily = dailyTasks.filter(t => !t.is_completed);
+    
+    if (uncompletedDaily.length > 0) {
+      reminders.push({
+        type: 'daily_task',
+        title: '每日任务提醒',
+        message: `还有 ${uncompletedDaily.length} 个每日任务未完成，快去完成吧！`,
+        count: uncompletedDaily.length,
+        priority: 'normal'
+      });
+    }
+    
+    const weeklyTasks = taskRepository.getUserWeeklyTasks(userId, today);
+    const uncompletedWeekly = weeklyTasks.filter(t => !t.is_completed);
+    
+    if (uncompletedWeekly.length > 0) {
+      reminders.push({
+        type: 'weekly_task',
+        title: '周任务提醒',
+        message: `还有 ${uncompletedWeekly.length} 个周任务未完成，本周结束前加油！`,
+        count: uncompletedWeekly.length,
+        priority: 'low'
+      });
+    }
+    
+    const chainGroups = this.getChainTasksWithStatus(userId);
+    chainGroups.forEach(group => {
+      const currentTask = group.tasks.find(t => t.isUnlocked && !t.isCompleted);
+      if (currentTask && currentTask.resetType === 'streak') {
+        reminders.push({
+          type: 'chain_task',
+          title: `${group.chainName}提醒`,
+          message: `「${currentTask.title}」是连续任务，别忘了今天记录心情保持连续！`,
+          taskId: currentTask.id,
+          chainId: group.chainId,
+          priority: 'high'
+        });
+      }
+    });
+    
+    return reminders;
   }
 }
 

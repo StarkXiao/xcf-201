@@ -2,6 +2,7 @@ const roomRepository = require('../repositories/roomRepository');
 const storyRepository = require('../repositories/storyRepository');
 const achievementRepository = require('../repositories/achievementRepository');
 const taskRepository = require('../repositories/taskRepository');
+const achievementService = require('./achievementService');
 const moodRepository = require('../repositories/moodRepository');
 
 class RoomService {
@@ -161,11 +162,7 @@ class RoomService {
     const branchStories = storyRepository.findByRoomAndBranch(roomId, activeBranch);
     const totalChapters = branchStories.length;
     
-    if (chapterNumber >= totalChapters && story.is_ending) {
-      const today = new Date();
-      const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
-      taskRepository.updateProgress(userId, 5, todayStr, 1);
-    }
+    achievementService.updateTaskProgress(userId, 'story_read', 1);
 
     let nextBranchChoices = [];
     if (story.is_branch_point) {

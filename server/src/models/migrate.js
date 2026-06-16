@@ -221,6 +221,134 @@ const migrate = db.transaction(() => {
     db.exec('CREATE INDEX IF NOT EXISTS idx_user_story_history_user ON user_story_history(user_id, room_id)');
     console.log('✅ 分支相关索引创建完成');
   }
+
+  // 迁移 tasks 表 - 添加连锁任务和重置相关字段
+  const taskColumns = db.prepare("PRAGMA table_info(tasks)").all();
+  const hasChainId = taskColumns.some(c => c.name === 'chain_id');
+  const hasChainOrder = taskColumns.some(c => c.name === 'chain_order');
+  const hasResetType = taskColumns.some(c => c.name === 'reset_type');
+  const hasResetDays = taskColumns.some(c => c.name === 'reset_days');
+  const hasIcon = taskColumns.some(c => c.name === 'icon');
+
+  if (!hasChainId || !hasChainOrder || !hasResetType || !hasResetDays || !hasIcon) {
+    console.log('📝 迁移 tasks 表，添加连锁任务和重置字段...');
+    
+    if (!hasChainId) {
+      db.exec('ALTER TABLE tasks ADD COLUMN chain_id INTEGER DEFAULT NULL');
+    }
+    if (!hasChainOrder) {
+      db.exec('ALTER TABLE tasks ADD COLUMN chain_order INTEGER DEFAULT 0');
+    }
+    if (!hasResetType) {
+      db.exec("ALTER TABLE tasks ADD COLUMN reset_type VARCHAR(20) DEFAULT 'none'");
+    }
+    if (!hasResetDays) {
+      db.exec('ALTER TABLE tasks ADD COLUMN reset_days INTEGER DEFAULT 0');
+    }
+    if (!hasIcon) {
+      db.exec("ALTER TABLE tasks ADD COLUMN icon VARCHAR(50) DEFAULT 'gift'");
+    }
+    
+    console.log('✅ tasks 表字段迁移完成');
+  } else {
+    console.log('⚠️  tasks 表已包含所需字段，跳过迁移');
+  }
+
+  // 添加周任务数据
+  const weeklyTaskCount = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE type = 'weekly'").get().count;
+  if (weeklyTaskCount === 0) {
+    console.log('📝 添加周任务数据...');
+    const insertWeeklyTask = db.prepare(`
+      INSERT INTO tasks (title, description, type, target, reward, icon, chain_id, chain_order, reset_type, reset_days)
+      VALUES (?, ?, 'weekly', ?, ?, ?, ?, ?, 'weekly', 7)
+    `);
+    
+    const weeklyTasks = [
+      ['心情周记', '本周记录至少 5 天心情', 5, 50, 'calendar', null, 0],
+      ['深度探索', '本周阅读 3 个故事章节', 3, 40, 'book-open', null, 0],
+      ['情绪调色板', '本周体验 3 种不同心情', 3, 45, 'palette', null, 0]
+    ];
+    
+    weeklyTasks.forEach(task => insertWeeklyTask.run(...task));
+    console.log(`✅ 添加 ${weeklyTasks.length} 个周任务`);
+  } else {
+    console.log('⚠️  周任务已存在，跳过');
+  }
+
+  // 添加连锁任务数据 - 心情记录成长链
+  const chainTaskCount = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE chain_id = 1").get().count;
+  if (chainTaskCount === 0) {
+    console.log('📝 添加连锁任务数据（心情成长链）...');
+    const insertChainTask = db.prepare(`
+      INSERT INTO tasks (title, description, type, target, reward, icon, chain_id, chain_order, reset_type, reset_days)
+      VALUES (?, ?, 'chain', ?, ?, ?, 1, ?, 'streak', 1)
+    `);
+    
+    const chainTasks = [
+      ['初入梦境', '完成第 1 天心情记录', 1, 10, 'moon', 1],
+      ['渐入佳境', '连续 3 天记录心情', 3, 25, 'star', 2],
+      ['习惯养成', '连续 7 天记录心情', 7, 50, 'flame', 3],
+      ['坚持不懈', '连续 14 天记录心情', 14, 100, 'trophy', 4],
+      ['梦境大师', '连续 30 天记录心情', 30, 200, 'crown', 5]
+    ];
+    
+    chainTasks.forEach(task => insertChainTask.run(...task));
+    console.log(`✅ 添加 ${chainTasks.length} 个连锁任务`);
+  } else {
+    console.log('⚠️  连锁任务已存在，跳过');
+  }
+
+  // 添加任务链索引
+  const taskChainIndexExists = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_tasks_chain_id'").get();
+  if (!taskChainIndexExists) {
+    console.log('📝 创建任务链索引...');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_chain_id ON tasks(chain_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_tasks_type ON tasks(type)');
+    console.log('✅ 任务链索引创建完成');
+  }
+
+  // 为现有任务设置图标
+  const iconUpdateCount = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE icon = 'gift' AND type IN ('daily', 'once')").get().count;
+  if (iconUpdateCount > 0) {
+    console.log('📝 为现有任务设置图标...');
+    
+    const taskIcons = {
+      1: 'heart',
+      2: 'pen-tool',
+      3: 'calendar-days',
+      4: 'sparkles',
+      5: 'book-open',
+      6: 'layers',
+      7: 'tags',
+      8: 'target'
+    };
+    
+    const updateIconStmt = db.prepare('UPDATE tasks SET icon = ? WHERE id = ?');
+    for (const [taskId, icon] of Object.entries(taskIcons)) {
+      updateIconStmt.run(icon, taskId);
+    }
+    console.log('✅ 现有任务图标更新完成');
+  }
+
+  // 迁移 user_tasks 表 - 添加时间字段
+  const userTaskColumns = db.prepare("PRAGMA table_info(user_tasks)").all();
+  const hasCompletedAt = userTaskColumns.some(c => c.name === 'completed_at');
+  const hasClaimedAt = userTaskColumns.some(c => c.name === 'claimed_at');
+
+  if (!hasCompletedAt || !hasClaimedAt) {
+    console.log('📝 迁移 user_tasks 表，添加时间字段...');
+    
+    if (!hasCompletedAt) {
+      db.exec('ALTER TABLE user_tasks ADD COLUMN completed_at DATETIME DEFAULT NULL');
+    }
+    if (!hasClaimedAt) {
+      db.exec('ALTER TABLE user_tasks ADD COLUMN claimed_at DATETIME DEFAULT NULL');
+    }
+    
+    console.log('✅ user_tasks 表字段迁移完成');
+  } else {
+    console.log('⚠️  user_tasks 表已包含时间字段，跳过迁移');
+  }
 });
 
 try {

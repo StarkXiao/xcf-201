@@ -108,7 +108,12 @@ CREATE TABLE IF NOT EXISTS tasks (
   description TEXT,
   type VARCHAR(20) NOT NULL,
   target INTEGER DEFAULT 1,
-  reward INTEGER DEFAULT 0
+  reward INTEGER DEFAULT 0,
+  chain_id INTEGER DEFAULT NULL,
+  chain_order INTEGER DEFAULT 0,
+  reset_type VARCHAR(20) DEFAULT 'none',
+  reset_days INTEGER DEFAULT 0,
+  icon VARCHAR(50) DEFAULT 'gift'
 );
 
 -- 用户任务关联表

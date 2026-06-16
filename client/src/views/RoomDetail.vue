@@ -2,6 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/room'
+import { useAchievementStore } from '@/stores/achievement'
 import { 
   ArrowLeft, ChevronLeft, ChevronRight, BookOpen, Bookmark, 
   GitBranch, Clock, History, X, Lock, Check, Sparkles 
@@ -11,6 +12,7 @@ import NotificationToast from '@/components/NotificationToast.vue'
 const route = useRoute()
 const router = useRouter()
 const roomStore = useRoomStore()
+const achievementStore = useAchievementStore()
 
 const roomId = computed(() => parseInt(route.params.id))
 const currentChapterIndex = ref(0)
@@ -113,7 +115,13 @@ function skipAnimation() {
 
 async function markAsRead() {
   const chapterNumber = currentChapterIndex.value + 1
-  await roomStore.readChapter(roomId.value, chapterNumber, currentBranch.value)
+  const result = await roomStore.readChapter(roomId.value, chapterNumber, currentBranch.value)
+  
+  if (result?.success) {
+    achievementStore.fetchTasks()
+    achievementStore.fetchTaskStats()
+    achievementStore.fetchReminders()
+  }
 }
 
 function checkBranchPoint() {

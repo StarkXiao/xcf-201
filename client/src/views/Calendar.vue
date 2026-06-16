@@ -1,11 +1,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useMoodStore } from '@/stores/mood'
-import { ChevronLeft, ChevronRight, Plus, Flame, BarChart3, Layers, Target } from 'lucide-vue-next'
+import { useAchievementStore } from '@/stores/achievement'
+import { ChevronLeft, ChevronRight, Plus, Flame, BarChart3, Layers, Target, Gift } from 'lucide-vue-next'
 import MoodModal from '@/components/MoodModal.vue'
 import NotificationToast from '@/components/NotificationToast.vue'
 
 const moodStore = useMoodStore()
+const achievementStore = useAchievementStore()
 
 const currentDate = ref(new Date())
 const showModal = ref(false)
@@ -153,6 +155,19 @@ async function handleSubmit(moodData) {
         showToast.value = true
       }, 4000)
     }
+    
+    if (result.data.newlyCompletedTasks?.length > 0) {
+      setTimeout(() => {
+        toastType.value = 'success'
+        const taskNames = result.data.newlyCompletedTasks.map(t => t.title).join('、')
+        toastMessage.value = `🎯 完成任务：${taskNames}！快去领取奖励吧~`
+        showToast.value = true
+      }, 6000)
+    }
+    
+    achievementStore.fetchTasks()
+    achievementStore.fetchTaskStats()
+    achievementStore.fetchReminders()
     
     loadMoods()
     

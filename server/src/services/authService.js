@@ -1,4 +1,5 @@
 const userRepository = require('../repositories/userRepository');
+const achievementService = require('./achievementService');
 const { hashPasswordSync, comparePasswordSync } = require('../utils/password');
 const { generateToken } = require('../utils/jwt');
 
@@ -84,6 +85,7 @@ class AuthService {
     }
     
     const stats = userRepository.getStats(userId);
+    const taskStats = achievementService.getTaskStats(userId);
     
     return {
       id: user.id,
@@ -94,6 +96,14 @@ class AuthService {
       totalMoods: stats.total_moods,
       unlockedRooms: stats.unlocked_rooms,
       unlockedAchievements: stats.unlocked_achievements,
+      taskStats: {
+        dailyCompleted: taskStats.dailyCompleted,
+        weeklyCompleted: taskStats.weeklyCompleted,
+        onceCompleted: taskStats.onceCompleted,
+        chainCompleted: taskStats.chainCompleted,
+        totalCompleted: taskStats.totalCompleted,
+        totalClaimed: taskStats.totalClaimed
+      },
       createdAt: user.created_at
     };
   }

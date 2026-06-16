@@ -62,7 +62,10 @@ export const roomApi = {
 export const achievementApi = {
   getTasks: () => api.get('/tasks'),
   claimTask: (id) => api.post(`/tasks/${id}/claim`),
-  getAchievements: () => api.get('/achievements')
+  updateTaskProgress: (taskType, amount) => api.post('/tasks/progress/update', { taskType, amount }),
+  getTaskStats: () => api.get('/tasks/stats'),
+  getAchievements: () => api.get('/achievements'),
+  getReminders: () => api.get('/reminders')
 }
 
 export default api
