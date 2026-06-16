@@ -3,6 +3,7 @@ const roomRepository = require('../repositories/roomRepository');
 const achievementRepository = require('../repositories/achievementRepository');
 const taskRepository = require('../repositories/taskRepository');
 const userRepository = require('../repositories/userRepository');
+const retrospectiveRepository = require('../repositories/retrospectiveRepository');
 const roomService = require('./roomService');
 
 const MOOD_SCORES = {
@@ -784,6 +785,22 @@ class ProfileService {
     const thisQuarterData = this.generateQuarterSummary(moodCurve, roomPreference, taskCompletion, achievementRhythm, 0);
     const overallData = this.generateOverallSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm);
 
+    const currentMonthRetro = retrospectiveRepository.getStats(userId, year, month);
+    const lastMonthYear = month === 1 ? year - 1 : year;
+    const lastMonthMonth = month === 1 ? 12 : month - 1;
+    const lastMonthRetro = retrospectiveRepository.getStats(userId, lastMonthYear, lastMonthMonth);
+    
+    const quarter = Math.floor((month - 1) / 3);
+    const quarterStartMonth = quarter * 3 + 1;
+    const quarterEndMonth = quarter * 3 + 3;
+    let quarterRetroCount = 0;
+    for (let m = quarterStartMonth; m <= quarterEndMonth; m++) {
+      const stats = retrospectiveRepository.getStats(userId, year, m);
+      quarterRetroCount += stats?.totalCount || 0;
+    }
+    
+    const overallRetroStats = retrospectiveRepository.getStats(userId);
+
     const currentMonth = {
       periodLabel: `${year}年${month}月`,
       avgMoodScore: currentMonthData?.mood?.avgScore || 0,
@@ -794,7 +811,9 @@ class ProfileService {
       tasksCompleted: currentMonthData?.tasks?.completed || 0,
       completionRate: currentMonthData?.tasks?.completionRate || 0,
       achievementsUnlocked: currentMonthData?.achievements?.unlocked || 0,
-      highlights: this.generateHighlights(currentMonthData, moodCurve, taskCompletion, achievementRhythm, 0)
+      retrospectives: currentMonthRetro?.totalCount || 0,
+      retroTypes: currentMonthRetro?.typeDistribution || {},
+      highlights: this.generateHighlights(currentMonthData, moodCurve, taskCompletion, achievementRhythm, 0, currentMonthRetro)
     };
 
     const lastMonth = {
@@ -807,9 +826,11 @@ class ProfileService {
       tasksCompleted: lastMonthData?.tasks?.completed || 0,
       completionRate: lastMonthData?.tasks?.completionRate || 0,
       achievementsUnlocked: lastMonthData?.achievements?.unlocked || 0,
+      retrospectives: lastMonthRetro?.totalCount || 0,
       comparison: {
         moodChange: Math.round((currentMonthData?.mood?.avgScore || 0) - (lastMonthData?.mood?.avgScore || 0) * 10) / 10,
-        taskChange: (currentMonthData?.tasks?.completed || 0) - (lastMonthData?.tasks?.completed || 0)
+        taskChange: (currentMonthData?.tasks?.completed || 0) - (lastMonthData?.tasks?.completed || 0),
+        retroChange: (currentMonthRetro?.totalCount || 0) - (lastMonthRetro?.totalCount || 0)
       }
     };
 
@@ -820,7 +841,8 @@ class ProfileService {
       tasksClaimed: thisQuarterData?.tasks?.completed || 0,
       achievementsUnlocked: thisQuarterData?.achievements?.unlocked || 0,
       longestStreak: taskCompletion.streak?.longestStreak || 0,
-      summary: this.generateQuarterSummaryText(thisQuarterData)
+      retrospectives: quarterRetroCount,
+      summary: this.generateQuarterSummaryText(thisQuarterData, quarterRetroCount)
     };
 
     const overall = {
@@ -829,8 +851,9 @@ class ProfileService {
       totalChaptersRead: roomPreference.totalChaptersRead || 0,
       totalTasksCompleted: taskCompletion.overallStats?.totalCompleted || 0,
       totalAchievements: achievementRhythm.stats?.totalUnlocked || 0,
+      totalRetrospectives: overallRetroStats?.totalCount || 0,
       summary: overallData?.averages ? 
-        `累计记录情绪 ${moodCurve.overallStats?.totalRecords || 0} 次，阅读 ${roomPreference.totalChaptersRead || 0} 章故事，完成 ${taskCompletion.overallStats?.totalCompleted || 0} 个任务，解锁 ${achievementRhythm.stats?.totalUnlocked || 0} 个成就。感谢你的坚持！` :
+        `累计记录情绪 ${moodCurve.overallStats?.totalRecords || 0} 次，撰写回顾 ${overallRetroStats?.totalCount || 0} 篇，阅读 ${roomPreference.totalChaptersRead || 0} 章故事，完成 ${taskCompletion.overallStats?.totalCompleted || 0} 个任务，解锁 ${achievementRhythm.stats?.totalUnlocked || 0} 个成就。感谢你的坚持！` :
         '感谢你一直以来的坚持，每一次记录都是成长的脚印。'
     };
 
@@ -857,7 +880,7 @@ class ProfileService {
     return `${year}年${quarterNames[quarter]}`;
   }
 
-  generateHighlights(monthData, moodCurve, taskCompletion, achievementRhythm, offset) {
+  generateHighlights(monthData, moodCurve, taskCompletion, achievementRhythm, offset, retroStats) {
     const highlights = [];
     
     if (monthData?.mood?.recordRate >= 80) {
@@ -878,6 +901,11 @@ class ProfileService {
     if (monthData?.rooms?.chaptersRead >= 5) {
       highlights.push(`本月阅读了 ${monthData.rooms.chaptersRead} 章故事，阅读习惯很棒！`);
     }
+    if (retroStats?.totalCount >= 5) {
+      highlights.push(`本月撰写了 ${retroStats.totalCount} 篇回顾，深度反思助你成长！`);
+    } else if (retroStats?.totalCount >= 2) {
+      highlights.push(`本月有 ${retroStats.totalCount} 篇回顾记录，继续保持反思的习惯！`);
+    }
     
     if (highlights.length === 0) {
       highlights.push('本月继续探索，记录更多美好瞬间！');
@@ -886,7 +914,7 @@ class ProfileService {
     return highlights.slice(0, 4);
   }
 
-  generateQuarterSummaryText(quarterData) {
+  generateQuarterSummaryText(quarterData, retroCount = 0) {
     if (!quarterData) return '本季度你一直在持续进步，继续保持！';
     
     const parts = [];
@@ -898,6 +926,11 @@ class ProfileService {
     }
     if (quarterData.achievements?.unlocked > 0) {
       parts.push(`解锁了 ${quarterData.achievements.unlocked} 个成就`);
+    }
+    if (retroCount >= 10) {
+      parts.push(`撰写了 ${retroCount} 篇深度回顾`);
+    } else if (retroCount > 0) {
+      parts.push(`有 ${retroCount} 篇回顾记录`);
     }
     
     if (parts.length > 0) {

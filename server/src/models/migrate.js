@@ -147,12 +147,12 @@ const migrate = db.transaction(() => {
     WHERE id = ?
   `);
   
-  roomUpdates.run('默认解锁', 0, 0, NULL, 0, NULL, NULL, 1);
-  roomUpdates.run('记录心情 3 天，体验 2 种情绪', 3, 0, '["happy","calm","sad","anxious","angry"]', 0, NULL, '{"moodTypeCount":2}', 2);
-  roomUpdates.run('记录心情 7 天，阅读 3 个章节', 7, 0, NULL, 3, NULL, '{"chapters":3}', 3);
-  roomUpdates.run('多段记录 5 天，完成「心情随笔」任务', 0, 5, NULL, 0, '[2]', '{"multiSegmentDays":5,"tasks":[2]}', 4);
-  roomUpdates.run('多段记录 10 天，体验 4 种情绪，阅读 5 个章节', 0, 10, '["happy","calm","sad","anxious","angry"]', 5, NULL, '{"multiSegmentDays":10,"moodTypeCount":4,"chapters":5}', 5);
-  roomUpdates.run('多段记录 15 天，完成 3 个长期任务，阅读 10 个章节', 0, 15, NULL, 10, '[3,4,5]', '{"multiSegmentDays":15,"chapters":10,"tasks":[3,4,5]}', 6);
+  roomUpdates.run('默认解锁', 0, 0, null, 0, null, null, 1);
+  roomUpdates.run('记录心情 3 天，体验 2 种情绪', 3, 0, '["happy","calm","sad","anxious","angry"]', 0, null, '{"moodTypeCount":2}', 2);
+  roomUpdates.run('记录心情 7 天，阅读 3 个章节', 7, 0, null, 3, null, '{"chapters":3}', 3);
+  roomUpdates.run('多段记录 5 天，完成「心情随笔」任务', 0, 5, null, 0, '[2]', '{"multiSegmentDays":5,"tasks":[2]}', 4);
+  roomUpdates.run('多段记录 10 天，体验 4 种情绪，阅读 5 个章节', 0, 10, '["happy","calm","sad","anxious","angry"]', 5, null, '{"multiSegmentDays":10,"moodTypeCount":4,"chapters":5}', 5);
+  roomUpdates.run('多段记录 15 天，完成 3 个长期任务，阅读 10 个章节', 0, 15, null, 10, '[3,4,5]', '{"multiSegmentDays":15,"chapters":10,"tasks":[3,4,5]}', 6);
   console.log('✅ 房间解锁条件更新完成');
 
   // 迁移 stories 表 - 添加分支字段
@@ -392,6 +392,73 @@ const migrate = db.transaction(() => {
     console.log('✅ user_tasks 表字段迁移完成');
   } else {
     console.log('⚠️  user_tasks 表已包含时间字段，跳过迁移');
+  }
+
+  // 创建 mood_retrospectives 表
+  const retroTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='mood_retrospectives'").get();
+  if (!retroTableExists) {
+    console.log('📝 创建 mood_retrospectives 表...');
+    db.exec(`
+      CREATE TABLE mood_retrospectives (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        mood_id INTEGER,
+        record_date DATE NOT NULL,
+        time_segment VARCHAR(20),
+        retrospect_type VARCHAR(20) NOT NULL DEFAULT 'feeling',
+        content TEXT NOT NULL,
+        mood_shift VARCHAR(20),
+        tags VARCHAR(500),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (mood_id) REFERENCES moods(id)
+      )
+    `);
+    console.log('✅ mood_retrospectives 表创建完成');
+  } else {
+    console.log('⚠️  mood_retrospectives 表已存在，跳过');
+  }
+
+  // 创建回顾相关索引
+  const retroIndexExists = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_mood_retrospectives_user_id'").get();
+  if (!retroIndexExists) {
+    console.log('📝 创建回顾相关索引...');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_mood_retrospectives_user_id ON mood_retrospectives(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_mood_retrospectives_record_date ON mood_retrospectives(record_date)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_mood_retrospectives_mood_id ON mood_retrospectives(mood_id)');
+    console.log('✅ 回顾相关索引创建完成');
+  }
+
+  // 添加回顾相关任务
+  const retroTaskCount = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE id IN (20, 21)").get().count;
+  if (retroTaskCount < 2) {
+    console.log('📝 添加回顾复写相关任务...');
+    const insertTask = db.prepare(`
+      INSERT OR IGNORE INTO tasks (id, title, description, type, target, reward, icon, reset_type, reset_days)
+      VALUES (?, ?, ?, 'daily', ?, ?, ?, 'daily', 1)
+    `);
+    insertTask.run(20, '每日回顾', '为过去的心情记录添加回顾感受', 1, 15, 'book-open');
+    insertTask.run(21, '深度反思', '一天内添加 3 条以上回顾内容', 3, 30, 'sparkles');
+    console.log('✅ 回顾任务添加完成');
+  } else {
+    console.log('⚠️  回顾任务已存在，跳过');
+  }
+
+  // 添加回顾相关成就
+  const retroAchievementCount = db.prepare("SELECT COUNT(*) as count FROM achievements WHERE condition_type = 'retrospective_count'").get().count;
+  if (retroAchievementCount === 0) {
+    console.log('📝 添加回顾复写相关成就...');
+    const insertAchievement = db.prepare(`
+      INSERT INTO achievements (name, description, icon, condition_type, condition_value)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    insertAchievement.run('初次回望', '完成第 1 次心情回顾', '📖', 'retrospective_count', 1);
+    insertAchievement.run('回忆收集者', '累计完成 10 次心情回顾', '📚', 'retrospective_count', 10);
+    insertAchievement.run('深度反思者', '累计完成 50 次心情回顾', '🔮', 'retrospective_count', 50);
+    insertAchievement.run('时光旅人', '累计完成 100 次心情回顾', '⏳', 'retrospective_count', 100);
+    console.log('✅ 回顾成就添加完成');
+  } else {
+    console.log('⚠️  回顾成就已存在，跳过');
   }
 });
 

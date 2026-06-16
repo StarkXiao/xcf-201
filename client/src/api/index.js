@@ -47,6 +47,14 @@ export const moodApi = {
   deleteMood: (date, timeSegment) => api.delete(`/moods/${date}`, { data: { timeSegment } })
 }
 
+export const retrospectiveApi = {
+  getConfig: () => api.get('/retrospectives/config'),
+  createRetrospective: (data) => api.post('/retrospectives', data),
+  getRetrospectivesByDate: (date) => api.get(`/retrospectives/date/${date}`),
+  getMonthRetrospectives: (year, month) => api.get('/retrospectives/month', { params: { year, month } }),
+  deleteRetrospective: (id) => api.delete(`/retrospectives/${id}`)
+}
+
 export const roomApi = {
   getRooms: () => api.get('/rooms'),
   getRoomDetail: (id, branch = null) => api.get(`/rooms/${id}`, { params: branch ? { branch } : {} }),

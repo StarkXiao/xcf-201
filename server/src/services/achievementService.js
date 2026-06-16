@@ -270,7 +270,9 @@ class AchievementService {
       5: 'story_read',
       6: 'mood_multi_segment',
       7: 'mood_tag_weight',
-      8: 'mood_multi_segment'
+      8: 'mood_multi_segment',
+      20: 'retrospective_record',
+      21: 'retrospective_deep'
     };
     
     const taskAction = taskActionMap[task.id] || 'mood_record';
@@ -435,7 +437,8 @@ class AchievementService {
       'cross_room_read': `跨房间阅读 ${conditionValue} 个故事章节`,
       'specific_mood_records': `指定情绪记录 ${conditionValue} 次`,
       'consecutive_task_claims': `连续 ${conditionValue} 天领取任务奖励`,
-      'combo_achievement': '完成所有组合条件'
+      'combo_achievement': '完成所有组合条件',
+      'retrospective_count': `累计完成 ${conditionValue} 次心情回顾`
     };
     
     return conditionMap[conditionType] || `${conditionType} ${conditionValue}`;

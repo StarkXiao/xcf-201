@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { Calendar, Award, TrendingUp, Star, Sparkles, Target, Heart, BookOpen, Zap, Lightbulb } from 'lucide-vue-next'
+import { Calendar, Award, TrendingUp, Star, Sparkles, Target, Heart, BookOpen, Zap, Lightbulb, RefreshCw } from 'lucide-vue-next'
 
 const props = defineProps({
   periodSummary: {
@@ -124,6 +124,15 @@ function getInsightColor(type) {
               <span class="stat-label">解锁成就</span>
             </div>
           </div>
+          <div class="period-stat">
+            <div class="stat-icon-wrapper retro">
+              <RefreshCw class="stat-icon" />
+            </div>
+            <div class="stat-content">
+              <span class="stat-value">{{ currentMonth.retrospectives || 0 }}</span>
+              <span class="stat-label">回顾复写</span>
+            </div>
+          </div>
         </div>
         
         <div class="period-mood" v-if="currentMonth.mostCommonMood">
@@ -175,6 +184,14 @@ function getInsightColor(type) {
           <div class="stat-row">
             <span class="stat-row-label">解锁成就</span>
             <span class="stat-row-value">{{ lastMonth.achievementsUnlocked || 0 }}个</span>
+          </div>
+          <div class="stat-row">
+            <span class="stat-row-label">回顾复写</span>
+            <span class="stat-row-value">
+              {{ lastMonth.retrospectives || 0 }}篇
+              <span v-if="lastMonth.comparison?.retroChange > 0" class="change positive">+{{ lastMonth.comparison.retroChange }}</span>
+              <span v-else-if="lastMonth.comparison?.retroChange < 0" class="change negative">{{ lastMonth.comparison.retroChange }}</span>
+            </span>
           </div>
         </div>
         
@@ -228,6 +245,10 @@ function getInsightColor(type) {
             <span class="stat-row-label">最长连续</span>
             <span class="stat-row-value">{{ currentQuarter.longestStreak || 0 }}天</span>
           </div>
+          <div class="stat-row">
+            <span class="stat-row-label">回顾复写</span>
+            <span class="stat-row-value">{{ currentQuarter.retrospectives || 0 }}篇</span>
+          </div>
         </div>
         
         <div class="period-summary-text">
@@ -262,6 +283,10 @@ function getInsightColor(type) {
           <div class="overall-stat">
             <span class="overall-stat-value">{{ overall.totalAchievements || 0 }}</span>
             <span class="overall-stat-label">成就解锁</span>
+          </div>
+          <div class="overall-stat">
+            <span class="overall-stat-value">{{ overall.totalRetrospectives || 0 }}</span>
+            <span class="overall-stat-label">回顾复写</span>
           </div>
         </div>
         
@@ -502,6 +527,11 @@ function getInsightColor(type) {
   &.achievement {
     background: rgba(251, 191, 36, 0.2);
     .stat-icon { color: #fbbf24; }
+  }
+  
+  &.retro {
+    background: rgba(139, 92, 246, 0.2);
+    .stat-icon { color: #8b5cf6; }
   }
   
   .stat-icon {

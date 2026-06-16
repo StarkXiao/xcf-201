@@ -153,9 +153,28 @@ CREATE TABLE IF NOT EXISTS user_achievements (
   UNIQUE(user_id, achievement_id)
 );
 
+-- 心情回顾复写表
+CREATE TABLE IF NOT EXISTS mood_retrospectives (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  mood_id INTEGER,
+  record_date DATE NOT NULL,
+  time_segment VARCHAR(20),
+  retrospect_type VARCHAR(20) NOT NULL DEFAULT 'feeling',
+  content TEXT NOT NULL,
+  mood_shift VARCHAR(20),
+  tags VARCHAR(500),
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (mood_id) REFERENCES moods(id)
+);
+
 -- 创建索引
 CREATE INDEX IF NOT EXISTS idx_moods_user_id ON moods(user_id);
 CREATE INDEX IF NOT EXISTS idx_moods_record_date ON moods(record_date);
+CREATE INDEX IF NOT EXISTS idx_mood_retrospectives_user_id ON mood_retrospectives(user_id);
+CREATE INDEX IF NOT EXISTS idx_mood_retrospectives_record_date ON mood_retrospectives(record_date);
+CREATE INDEX IF NOT EXISTS idx_mood_retrospectives_mood_id ON mood_retrospectives(mood_id);
 CREATE INDEX IF NOT EXISTS idx_stories_room_id ON stories(room_id);
 CREATE INDEX IF NOT EXISTS idx_stories_branch_key ON stories(branch_key);
 CREATE INDEX IF NOT EXISTS idx_stories_parent_id ON stories(parent_id);

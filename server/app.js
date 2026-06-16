@@ -59,6 +59,7 @@ const authRoutes = require('./src/routes/auth');
 const moodRoutes = require('./src/routes/moods');
 const roomRoutes = require('./src/routes/rooms');
 const achievementRoutes = require('./src/routes/achievements');
+const retrospectiveRoutes = require('./src/routes/retrospectives');
 
 const publicRouter = new Router();
 publicRouter.get('/api/auth/login', async (ctx) => {
@@ -89,6 +90,8 @@ app.use(roomRoutes.routes());
 app.use(roomRoutes.allowedMethods());
 app.use(achievementRoutes.routes());
 app.use(achievementRoutes.allowedMethods());
+app.use(retrospectiveRoutes.routes());
+app.use(retrospectiveRoutes.allowedMethods());
 
 app.listen(PORT, () => {
   console.log(`

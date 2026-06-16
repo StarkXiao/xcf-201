@@ -1,9 +1,13 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { X, Sparkles, Sun, Sunrise, Moon, Star, Trash2 } from 'lucide-vue-next'
+import { X, Sparkles, Sun, Sunrise, Moon, Star, Trash2, BookOpen, Lightbulb, Heart, Award, RefreshCw } from 'lucide-vue-next'
 import { useMoodStore } from '@/stores/mood'
+import { useRetrospectiveStore } from '@/stores/retrospective'
+import { useAchievementStore } from '@/stores/achievement'
 
 const moodStore = useMoodStore()
+const retrospectiveStore = useRetrospectiveStore()
+const achievementStore = useAchievementStore()
 
 const props = defineProps({
   show: Boolean,
@@ -11,7 +15,9 @@ const props = defineProps({
   existingMood: Object
 })
 
-const emit = defineEmits(['close', 'submit', 'delete'])
+const emit = defineEmits(['close', 'submit', 'delete', 'retrospectiveCreated'])
+
+const activeTab = ref('mood')
 
 const moodTypes = [
   { type: 'happy', emoji: '😊', label: '开心', color: 'var(--mood-happy)' },
@@ -27,6 +33,14 @@ const timeSegments = [
   { key: 'evening', label: '晚间', icon: Moon, timeRange: '18:00 - 24:00' }
 ]
 
+const retrospectTypes = [
+  { key: 'feeling', label: '感受补写', icon: Heart, description: '补充当时的感受' },
+  { key: 'insight', label: '新的感悟', icon: Lightbulb, description: '事后的新领悟' },
+  { key: 'gratitude', label: '感恩反思', icon: Award, description: '感恩的人和事' },
+  { key: 'lesson', label: '经验教训', icon: BookOpen, description: '学到的经验' },
+  { key: 'other', label: '其他回顾', icon: Sparkles, description: '其他想说的话' }
+]
+
 const selectedSegment = ref('morning')
 const selectedMood = ref('')
 const content = ref('')
@@ -36,9 +50,20 @@ const isSubmitting = ref(false)
 const existingSegments = ref([])
 const showTagWeightPanel = ref(false)
 
+const retrospectives = ref([])
+const selectedRetrospectType = ref('feeling')
+const retrospectContent = ref('')
+const retrospectMoodShift = ref('')
+const retrospectTags = ref('')
+const isRetrospectiveSubmitting = ref(false)
+const showRetrospectForm = ref(false)
+
 onMounted(() => {
   if (!moodStore.config) {
     moodStore.fetchConfig()
+  }
+  if (!retrospectiveStore.config) {
+    retrospectiveStore.fetchConfig()
   }
 })
 
@@ -49,7 +74,7 @@ function detectCurrentSegment() {
   return 'evening'
 }
 
-watch(() => props.show, (newVal) => {
+watch(() => props.show, async (newVal) => {
   if (newVal) {
     selectedSegment.value = detectCurrentSegment()
     existingSegments.value = props.existingMood?.segments || []
@@ -65,6 +90,13 @@ watch(() => props.show, (newVal) => {
       content.value = ''
       tagsInput.value = ''
       tagWeights.value = {}
+    }
+
+    if (props.date) {
+      const result = await retrospectiveStore.fetchRetrospectivesByDate(props.date)
+      if (result.success) {
+        retrospectives.value = result.data.retrospectives || []
+      }
     }
   }
 })
@@ -121,6 +153,21 @@ const totalTagWeight = computed(() => {
   return Object.values(tagWeights.value).reduce((a, b) => a + b, 0)
 })
 
+const retrospectTagsList = computed(() => {
+  return retrospectTags.value
+    .split(/[,，]/)
+    .map(t => t.trim())
+    .filter(t => t)
+})
+
+const canSubmitRetrospective = computed(() => {
+  return retrospectContent.value.trim() && !isRetrospectiveSubmitting.value
+})
+
+const selectedRetrospectTypeInfo = computed(() => {
+  return retrospectTypes.find(t => t.key === selectedRetrospectType.value)
+})
+
 function setTagWeight(tag, weight) {
   tagWeights.value = {
     ...tagWeights.value,
@@ -172,6 +219,69 @@ function handleDelete() {
 function selectSegment(segment) {
   selectedSegment.value = segment.key
 }
+
+function switchTab(tab) {
+  activeTab.value = tab
+}
+
+function selectRetrospectType(type) {
+  selectedRetrospectType.value = type.key
+}
+
+async function handleSubmitRetrospective() {
+  if (!canSubmitRetrospective.value) return
+  
+  isRetrospectiveSubmitting.value = true
+  
+  const result = await retrospectiveStore.createRetrospective({
+    recordDate: props.date,
+    timeSegment: selectedSegment.value,
+    retrospectType: selectedRetrospectType.value,
+    content: retrospectContent.value,
+    moodShift: retrospectMoodShift.value || null,
+    tags: retrospectTagsList.value
+  })
+  
+  isRetrospectiveSubmitting.value = false
+  
+  if (result.success) {
+    retrospectives.value = result.data.dateRetrospectives || []
+    
+    retrospectContent.value = ''
+    retrospectMoodShift.value = ''
+    retrospectTags.value = ''
+    showRetrospectForm.value = false
+    
+    achievementStore.fetchTasks()
+    
+    emit('retrospectiveCreated', result.data)
+  }
+}
+
+async function handleDeleteRetrospective(id) {
+  if (!confirm('确定要删除这条回顾吗？')) return
+  
+  const result = await retrospectiveStore.deleteRetrospective(id)
+  if (result.success) {
+    retrospectives.value = retrospectives.value.filter(r => r.id !== id)
+  }
+}
+
+function formatRetrospectiveTime(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+function getRetrospectTypeLabel(type) {
+  const found = retrospectTypes.find(t => t.key === type)
+  return found ? found.label : type
+}
+
+function getRetrospectTypeIcon(type) {
+  const found = retrospectTypes.find(t => t.key === type)
+  return found ? found.icon : Sparkles
+}
 </script>
 
 <template>
@@ -185,11 +295,32 @@ function selectSegment(segment) {
           
           <div class="modal-header">
             <Sparkles class="header-icon" />
-            <h2 class="modal-title">记录心情</h2>
+            <h2 class="modal-title">{{ activeTab === 'mood' ? '记录心情' : '回顾复写' }}</h2>
             <p class="modal-date">{{ formattedDate }}</p>
           </div>
 
-          <div class="segment-selector">
+          <div class="modal-tabs">
+            <button 
+              class="tab-btn"
+              :class="{ active: activeTab === 'mood' }"
+              @click="switchTab('mood')"
+            >
+              <Sparkles class="tab-icon" />
+              <span>心情记录</span>
+            </button>
+            <button 
+              class="tab-btn"
+              :class="{ active: activeTab === 'retrospective' }"
+              @click="switchTab('retrospective')"
+            >
+              <BookOpen class="tab-icon" />
+              <span>回顾复写</span>
+              <span v-if="retrospectives.length > 0" class="tab-badge">{{ retrospectives.length }}</span>
+            </button>
+          </div>
+
+          <div v-show="activeTab === 'mood'">
+            <div class="segment-selector">
             <p class="section-label">选择时段</p>
             <div class="segment-options">
               <button
@@ -291,6 +422,129 @@ function selectSegment(segment) {
                   当前总权重: {{ totalTagWeight }} / 目标: 10
                 </p>
               </div>
+            </div>
+          </div>
+          </div>
+
+          <div v-show="activeTab === 'retrospective'" class="retrospective-tab">
+            <div class="retrospective-header">
+              <p class="section-label">回顾一下这天的心情...</p>
+              <button 
+                v-if="!showRetrospectForm"
+                class="btn-add-retrospective"
+                @click="showRetrospectForm = true"
+              >
+                <RefreshCw class="btn-icon" />
+                添加回顾
+              </button>
+            </div>
+
+            <div v-if="showRetrospectForm" class="retrospect-form">
+              <div class="retrospect-type-selector">
+                <p class="section-label">选择回顾类型</p>
+                <div class="retrospect-type-grid">
+                  <button
+                    v-for="type in retrospectTypes"
+                    :key="type.key"
+                    class="retrospect-type-btn"
+                    :class="{ selected: selectedRetrospectType === type.key }"
+                    @click="selectRetrospectType(type)"
+                  >
+                    <component :is="type.icon" class="retrospect-type-icon" />
+                    <span class="retrospect-type-label">{{ type.label }}</span>
+                  </button>
+                </div>
+                <p class="retrospect-type-desc">{{ selectedRetrospectTypeInfo?.description }}</p>
+              </div>
+
+              <div class="retrospect-content">
+                <p class="section-label">回顾内容</p>
+                <textarea
+                  v-model="retrospectContent"
+                  class="content-textarea input-field"
+                  placeholder="写下你的回顾和感受..."
+                  rows="4"
+                />
+              </div>
+
+              <div class="retrospect-mood-shift">
+                <p class="section-label">现在回头看，心情有变化吗？（可选）</p>
+                <div class="mood-shift-options">
+                  <button
+                    v-for="mood in moodTypes"
+                    :key="mood.type"
+                    class="mood-shift-btn"
+                    :class="{ selected: retrospectMoodShift === mood.type }"
+                    :style="{ '--mood-color': mood.color }"
+                    @click="retrospectMoodShift = retrospectMoodShift === mood.type ? '' : mood.type"
+                  >
+                    <span class="mood-emoji">{{ mood.emoji }}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div class="retrospect-tags">
+                <p class="section-label">标签（可选，用逗号分隔）</p>
+                <input
+                  v-model="retrospectTags"
+                  class="tags-input input-field"
+                  placeholder="例如：反思, 成长, 感恩"
+                />
+              </div>
+
+              <div class="retrospect-form-actions">
+                <button class="btn-secondary" @click="showRetrospectForm = false">
+                  取消
+                </button>
+                <button 
+                  class="btn-primary"
+                  :disabled="!canSubmitRetrospective"
+                  @click="handleSubmitRetrospective"
+                >
+                  {{ isRetrospectiveSubmitting ? '保存中...' : '保存回顾' }}
+                </button>
+              </div>
+            </div>
+
+            <div v-if="retrospectives.length > 0" class="retrospective-list">
+              <p class="section-label">已有的回顾 ({{ retrospectives.length }})</p>
+              <div 
+                v-for="retro in retrospectives"
+                :key="retro.id"
+                class="retrospective-card"
+              >
+                <div class="retrospective-card-header">
+                  <div class="retrospective-card-type">
+                    <component :is="getRetrospectTypeIcon(retro.retrospect_type)" class="retro-type-icon" />
+                    <span class="retro-type-label">{{ getRetrospectTypeLabel(retro.retrospect_type) }}</span>
+                  </div>
+                  <div class="retrospective-card-meta">
+                    <span class="retro-time">{{ formatRetrospectiveTime(retro.created_at) }}</span>
+                    <button 
+                      class="retro-delete-btn"
+                      @click="handleDeleteRetrospective(retro.id)"
+                      title="删除回顾"
+                    >
+                      <Trash2 class="retro-delete-icon" />
+                    </button>
+                  </div>
+                </div>
+                <p class="retrospective-card-content">{{ retro.content }}</p>
+                <div v-if="retro.mood_shift" class="retrospective-card-mood">
+                  <span class="mood-shift-label">现在的心情：</span>
+                  <span class="mood-shift-emoji">{{ moodTypes.find(m => m.type === retro.mood_shift)?.emoji }}</span>
+                  <span class="mood-shift-text">{{ moodTypes.find(m => m.type === retro.mood_shift)?.label }}</span>
+                </div>
+                <div v-if="retro.tags && retro.tags.length > 0" class="retrospective-card-tags">
+                  <span class="retro-tag" v-for="tag in retro.tags" :key="tag">#{{ tag }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div v-else-if="!showRetrospectForm" class="empty-retrospective">
+              <BookOpen class="empty-icon" />
+              <p class="empty-text">还没有回顾记录</p>
+              <p class="empty-hint">回顾过去，记录成长和感悟</p>
             </div>
           </div>
           
@@ -822,6 +1076,354 @@ function selectSegment(segment) {
     opacity: 0;
     transform: translateY(30px);
   }
+}
+
+.modal-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 4px;
+  border-radius: var(--radius-md);
+}
+
+.tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  position: relative;
+  
+  &:hover {
+    color: var(--color-text);
+    background: rgba(255, 255, 255, 0.05);
+  }
+  
+  &.active {
+    background: var(--color-secondary);
+    color: var(--color-bg-dark);
+    font-weight: 500;
+  }
+}
+
+.tab-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.tab-badge {
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 9px;
+  background: var(--color-error);
+  color: white;
+  font-size: 0.7rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  
+  .tab-btn.active & {
+    background: var(--color-bg-dark);
+    color: var(--color-secondary);
+  }
+}
+
+.retrospective-tab {
+  margin-bottom: 16px;
+}
+
+.retrospective-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
+.btn-add-retrospective {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: var(--radius-md);
+  background: rgba(232, 180, 217, 0.15);
+  color: var(--color-secondary);
+  border: 1px solid rgba(232, 180, 217, 0.3);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  
+  &:hover {
+    background: rgba(232, 180, 217, 0.25);
+    transform: translateY(-1px);
+  }
+}
+
+.retrospect-form {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.retrospect-type-selector {
+  margin-bottom: 20px;
+}
+
+.retrospect-type-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.retrospect-type-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 12px 6px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid transparent;
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+    transform: translateY(-2px);
+  }
+  
+  &.selected {
+    background: rgba(232, 180, 217, 0.2);
+    border-color: var(--color-secondary);
+  }
+}
+
+.retrospect-type-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--color-secondary);
+}
+
+.retrospect-type-label {
+  font-size: 0.75rem;
+  color: var(--color-text);
+  text-align: center;
+}
+
+.retrospect-type-desc {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  margin-top: 8px;
+}
+
+.retrospect-content {
+  margin-bottom: 20px;
+}
+
+.retrospect-mood-shift {
+  margin-bottom: 20px;
+}
+
+.mood-shift-options {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+}
+
+.mood-shift-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  
+  &:hover {
+    transform: scale(1.1);
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  &.selected {
+    border-color: var(--mood-color);
+    background: color-mix(in srgb, var(--mood-color) 20%, transparent);
+    transform: scale(1.1);
+  }
+  
+  .mood-emoji {
+    font-size: 1.4rem;
+  }
+}
+
+.retrospect-tags {
+  margin-bottom: 20px;
+}
+
+.retrospect-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.retrospective-list {
+  margin-top: 16px;
+}
+
+.retrospective-card {
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: all var(--transition-fast);
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
+}
+
+.retrospective-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.retrospective-card-type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.retro-type-icon {
+  width: 16px;
+  height: 16px;
+  color: var(--color-secondary);
+}
+
+.retro-type-label {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-secondary);
+}
+
+.retrospective-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.retro-time {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.retro-delete-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition-fast);
+  
+  &:hover {
+    background: rgba(255, 100, 100, 0.15);
+    color: var(--color-error);
+  }
+}
+
+.retro-delete-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.retrospective-card-content {
+  font-size: 0.9rem;
+  color: var(--color-text);
+  line-height: 1.6;
+  margin-bottom: 10px;
+  white-space: pre-wrap;
+}
+
+.retrospective-card-mood {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+}
+
+.mood-shift-label {
+  color: var(--color-text-muted);
+}
+
+.mood-shift-emoji {
+  font-size: 1rem;
+}
+
+.mood-shift-text {
+  color: var(--color-text);
+}
+
+.retrospective-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.retro-tag {
+  font-size: 0.75rem;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(232, 180, 217, 0.15);
+  color: var(--color-secondary);
+}
+
+.empty-retrospective {
+  text-align: center;
+  padding: 40px 20px;
+}
+
+.empty-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+  opacity: 0.5;
+}
+
+.empty-text {
+  font-size: 1rem;
+  color: var(--color-text-muted);
+  margin-bottom: 4px;
+}
+
+.empty-hint {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  opacity: 0.7;
 }
 
 @media (max-width: 768px) {

@@ -1,13 +1,15 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useMoodStore } from '@/stores/mood'
 import { useAchievementStore } from '@/stores/achievement'
-import { ChevronLeft, ChevronRight, Plus, Flame, BarChart3, Layers, Target, Gift } from 'lucide-vue-next'
+import { useRetrospectiveStore } from '@/stores/retrospective'
+import { ChevronLeft, ChevronRight, Plus, Flame, BarChart3, Layers, Target, Gift, BookOpen, Sparkles, RefreshCw } from 'lucide-vue-next'
 import MoodModal from '@/components/MoodModal.vue'
 import NotificationToast from '@/components/NotificationToast.vue'
 
 const moodStore = useMoodStore()
 const achievementStore = useAchievementStore()
+const retrospectiveStore = useRetrospectiveStore()
 
 const currentDate = ref(new Date())
 const showModal = ref(false)
@@ -72,6 +74,7 @@ const calendarDays = computed(() => {
     const segmentProgress = recordedSegments.size
     
     const dominantMood = aggregate?.dominantMood || (dayRecords.length > 0 ? dayRecords[0].mood_type : null)
+    const retrospectiveCount = retrospectiveStore.getCountByDate(dateStr)
     
     days.push({
       day: i,
@@ -82,7 +85,8 @@ const calendarDays = computed(() => {
       segmentProgress,
       totalSegments: 3,
       aggregate,
-      segments: dayRecords
+      segments: dayRecords,
+      retrospectiveCount
     })
   }
   
@@ -195,14 +199,28 @@ async function handleDelete(deleteData) {
   }
 }
 
+async function handleRetrospectiveCreated(data) {
+  toastType.value = 'success'
+  toastMessage.value = '回顾已保存'
+  showToast.value = true
+  
+  await retrospectiveStore.fetchMonthRetrospectives(currentYear.value, currentMonth.value)
+}
+
 async function loadMoods() {
   await moodStore.fetchMoods(currentYear.value, currentMonth.value)
+  await retrospectiveStore.fetchMonthRetrospectives(currentYear.value, currentMonth.value)
 }
 
 const stats = computed(() => moodStore.stats)
 
+const monthRetrospectiveCount = computed(() => {
+  return retrospectiveStore.stats?.totalCount || 0
+})
+
 onMounted(async () => {
   await moodStore.fetchConfig()
+  await retrospectiveStore.fetchConfig()
   await loadMoods()
 })
 </script>
@@ -243,6 +261,13 @@ onMounted(async () => {
         <div class="stat-info">
           <span class="stat-value">{{ stats?.multiSegmentDays || 0 }}</span>
           <span class="stat-label">完整天数</span>
+        </div>
+      </div>
+      <div class="stat-card glass-card">
+        <RefreshCw class="stat-icon retro" />
+        <div class="stat-info">
+          <span class="stat-value">{{ monthRetrospectiveCount }}</span>
+          <span class="stat-label">本月回顾</span>
         </div>
       </div>
     </div>
@@ -308,6 +333,11 @@ onMounted(async () => {
           <div v-if="day.segmentProgress >= 3" class="complete-badge">
             ✨
           </div>
+          
+          <div v-if="day.isCurrentMonth && day.retrospectiveCount > 0" class="retrospective-badge" :title="`${day.retrospectiveCount} 条回顾`">
+            <BookOpen class="retro-icon" />
+            <span v-if="day.retrospectiveCount > 1" class="retro-count">{{ day.retrospectiveCount }}</span>
+          </div>
         </div>
       </div>
     </div>
@@ -361,6 +391,7 @@ onMounted(async () => {
       @close="showModal = false"
       @submit="handleSubmit"
       @delete="handleDelete"
+      @retrospective-created="handleRetrospectiveCreated"
     />
     
     <NotificationToast
@@ -393,7 +424,7 @@ onMounted(async () => {
 
 .stats-cards {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -429,6 +460,11 @@ onMounted(async () => {
   &.target {
     background: rgba(74, 222, 128, 0.15);
     color: var(--color-success);
+  }
+  
+  &.retro {
+    background: rgba(139, 92, 246, 0.15);
+    color: #8b5cf6;
   }
 }
 
@@ -617,6 +653,30 @@ onMounted(async () => {
   top: 4px;
   right: 4px;
   font-size: 0.8rem;
+}
+
+.retrospective-badge {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 6px;
+  border-radius: var(--radius-full);
+  background: rgba(123, 163, 201, 0.3);
+  color: var(--color-accent);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.retro-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.retro-count {
+  font-size: 0.65rem;
 }
 
 .mood-distribution,
