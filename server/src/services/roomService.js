@@ -10,27 +10,134 @@ class RoomService {
     const rooms = roomRepository.findAll(userId);
     const unlockedCount = roomRepository.getUnlockedCount(userId);
     const totalCount = roomRepository.getTotalCount();
+    const userProgress = roomRepository.getUnlockProgress(userId);
     
-    const formattedRooms = rooms.map(room => ({
-      id: room.id,
-      name: room.name,
-      description: room.description,
-      coverImage: room.cover_image,
-      unlockCondition: room.unlock_condition,
-      requiredDays: room.required_days,
-      requiredMultiSegmentDays: room.required_multi_segment_days,
-      isUnlocked: !!room.is_unlocked,
-      progress: room.current_chapter,
-      totalChapters: room.total_chapters,
-      currentBranch: room.current_branch || 'main',
-      unlockedAt: room.unlocked_at
-    }));
+    const formattedRooms = rooms.map(room => {
+      const unlockConditions = room.unlock_conditions ? JSON.parse(room.unlock_conditions) : null;
+      const requiredMoodTypes = room.required_mood_types ? JSON.parse(room.required_mood_types) : null;
+      const requiredTasks = room.required_tasks ? JSON.parse(room.required_tasks) : null;
+      
+      const conditionProgress = this.getConditionProgress(
+        userId, 
+        unlockConditions, 
+        requiredMoodTypes, 
+        requiredTasks,
+        userProgress
+      );
+      
+      return {
+        id: room.id,
+        name: room.name,
+        description: room.description,
+        coverImage: room.cover_image,
+        unlockCondition: room.unlock_condition,
+        requiredDays: room.required_days,
+        requiredMultiSegmentDays: room.required_multi_segment_days,
+        requiredMoodTypes: requiredMoodTypes,
+        requiredChapters: room.required_chapters,
+        requiredTasks: requiredTasks,
+        unlockConditions: unlockConditions,
+        conditionProgress: conditionProgress,
+        isUnlocked: !!room.is_unlocked,
+        progress: room.current_chapter,
+        totalChapters: room.total_chapters,
+        currentBranch: room.current_branch || 'main',
+        unlockedAt: room.unlocked_at
+      };
+    });
     
     return {
       rooms: formattedRooms,
       unlockedCount,
-      totalCount
+      totalCount,
+      userProgress
     };
+  }
+
+  getConditionProgress(userId, unlockConditions, requiredMoodTypes, requiredTasks, userProgress) {
+    if (!unlockConditions) return null;
+    
+    const progress = {};
+    
+    if (unlockConditions.days !== undefined) {
+      progress.days = {
+        current: userProgress.totalRecordDays,
+        target: unlockConditions.days,
+        met: userProgress.totalRecordDays >= unlockConditions.days
+      };
+    }
+    
+    if (unlockConditions.multiSegmentDays !== undefined) {
+      progress.multiSegmentDays = {
+        current: userProgress.multiSegmentDays,
+        target: unlockConditions.multiSegmentDays,
+        met: userProgress.multiSegmentDays >= unlockConditions.multiSegmentDays
+      };
+    }
+    
+    if (unlockConditions.moodTypeCount !== undefined) {
+      progress.moodTypeCount = {
+        current: userProgress.moodTypeCount,
+        target: unlockConditions.moodTypeCount,
+        met: userProgress.moodTypeCount >= unlockConditions.moodTypeCount
+      };
+    }
+    
+    if (unlockConditions.chapters !== undefined) {
+      progress.chapters = {
+        current: userProgress.totalChaptersRead,
+        target: unlockConditions.chapters,
+        met: userProgress.totalChaptersRead >= unlockConditions.chapters
+      };
+    }
+    
+    if (unlockConditions.tasks && unlockConditions.tasks.length > 0) {
+      const completedTaskIds = roomRepository.getCompletedTasks(userId, unlockConditions.tasks);
+      progress.tasks = {
+        current: completedTaskIds.length,
+        target: unlockConditions.tasks.length,
+        met: completedTaskIds.length >= unlockConditions.tasks.length,
+        completedIds: completedTaskIds,
+        requiredIds: unlockConditions.tasks
+      };
+    }
+    
+    return progress;
+  }
+
+  checkRoomUnlockConditions(userId, room) {
+    const unlockConditions = room.unlock_conditions ? JSON.parse(room.unlock_conditions) : null;
+    const requiredTasks = room.required_tasks ? JSON.parse(room.required_tasks) : null;
+    const userProgress = roomRepository.getUnlockProgress(userId);
+    
+    const result = {
+      canUnlock: true,
+      failedConditions: [],
+      progress: null
+    };
+    
+    if (!unlockConditions) {
+      return result;
+    }
+    
+    const conditionProgress = this.getConditionProgress(
+      userId, 
+      unlockConditions, 
+      room.required_mood_types ? JSON.parse(room.required_mood_types) : null,
+      requiredTasks,
+      userProgress
+    );
+    
+    result.progress = conditionProgress;
+    
+    for (const [key, value] of Object.entries(conditionProgress)) {
+      if (!value.met) {
+        result.canUnlock = false;
+        result.failedConditions.push(key);
+      }
+    }
+    
+    return result;
   }
 
   getRoomDetail(userId, roomId, branchKey = null) {
@@ -119,6 +226,18 @@ class RoomService {
       return { success: false, message: '房间已解锁' };
     }
     
+    const checkResult = this.checkRoomUnlockConditions(userId, room);
+    
+    if (!checkResult.canUnlock) {
+      const failedMessages = this.getFailedConditionMessages(checkResult.failedConditions, checkResult.progress);
+      return {
+        success: false,
+        message: '解锁条件未满足',
+        details: failedMessages,
+        progress: checkResult.progress
+      };
+    }
+    
     const result = roomRepository.unlockRoom(userId, roomId);
     
     if (result.success) {
@@ -130,6 +249,26 @@ class RoomService {
     }
     
     return result;
+  }
+
+  getFailedConditionMessages(failedConditions, progress) {
+    const messages = [];
+    const conditionLabels = {
+      days: '记录天数',
+      multiSegmentDays: '多段记录天数',
+      moodTypeCount: '情绪类型数量',
+      chapters: '章节阅读数',
+      tasks: '任务完成数'
+    };
+    
+    for (const key of failedConditions) {
+      const p = progress[key];
+      if (p) {
+        messages.push(`${conditionLabels[key] || key}: ${p.current} / ${p.target}`);
+      }
+    }
+    
+    return messages;
   }
 
   readChapter(userId, roomId, chapterNumber, branchKey = null) {

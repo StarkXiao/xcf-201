@@ -18,17 +18,17 @@ const seedData = db.transaction(() => {
   } else {
     console.log('📦 导入房间数据...');
     const insertRoom = db.prepare(`
-      INSERT INTO rooms (name, description, cover_image, unlock_condition, required_days, total_chapters, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO rooms (name, description, cover_image, unlock_condition, required_days, required_multi_segment_days, required_mood_types, required_chapters, required_tasks, unlock_conditions, total_chapters, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     
     const rooms = [
-      ['月光前厅', '梦境旅馆的入口，月光从彩色玻璃窗洒下，照亮了铺满星光的地板。', 'room1.jpg', '默认解锁', 0, 3, 1],
-      ['星尘书房', '堆满古老书籍的书房，每一本书都记录着一个旅人的梦境故事。', 'room2.jpg', '记录心情 3 天', 3, 4, 2],
-      ['回忆花房', '种满奇异花卉的温室，每朵花都承载着一段珍贵的回忆。', 'room3.jpg', '记录心情 7 天', 7, 4, 3],
-      ['回声长廊', '长长的走廊，墙壁上挂满了会低声细语的画像。', 'room4.jpg', '记录心情 14 天', 14, 5, 4],
-      ['梦境剧场', '华丽的剧院，舞台上正在上演着你内心深处的故事。', 'room5.jpg', '记录心情 21 天', 21, 5, 5],
-      ['心愿阁楼', '旅馆的最高处，可以看到整个梦境世界的星空。', 'room6.jpg', '记录心情 30 天', 30, 6, 6]
+      ['月光前厅', '梦境旅馆的入口，月光从彩色玻璃窗洒下，照亮了铺满星光的地板。', 'room1.jpg', '默认解锁', 0, 0, null, 0, null, null, 3, 1],
+      ['星尘书房', '堆满古老书籍的书房，每一本书都记录着一个旅人的梦境故事。', 'room2.jpg', '记录心情 3 天，体验 2 种情绪', 3, 0, '["happy","calm","sad","anxious","angry"]', 0, null, '{"moodTypeCount":2}', 4, 2],
+      ['回忆花房', '种满奇异花卉的温室，每朵花都承载着一段珍贵的回忆。', 'room3.jpg', '记录心情 7 天，阅读 3 个章节', 7, 0, null, 3, null, '{"chapters":3}', 4, 3],
+      ['回声长廊', '长长的走廊，墙壁上挂满了会低声细语的画像。', 'room4.jpg', '多段记录 5 天，完成「心情随笔」任务', 0, 5, null, 0, '[2]', '{"multiSegmentDays":5,"tasks":[2]}', 5, 4],
+      ['梦境剧场', '华丽的剧院，舞台上正在上演着你内心深处的故事。', 'room5.jpg', '多段记录 10 天，体验 4 种情绪，阅读 5 个章节', 0, 10, '["happy","calm","sad","anxious","angry"]', 5, null, '{"multiSegmentDays":10,"moodTypeCount":4,"chapters":5}', 5, 5],
+      ['心愿阁楼', '旅馆的最高处，可以看到整个梦境世界的星空。', 'room6.jpg', '多段记录 15 天，完成 3 个长期任务，阅读 10 个章节', 0, 15, null, 10, '[3,4,5]', '{"multiSegmentDays":15,"chapters":10,"tasks":[3,4,5]}', 6, 6]
     ];
     
     rooms.forEach(room => insertRoom.run(...room));

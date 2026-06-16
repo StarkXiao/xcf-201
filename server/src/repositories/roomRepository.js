@@ -11,6 +11,10 @@ class RoomRepository {
         r.unlock_condition,
         r.required_days,
         r.required_multi_segment_days,
+        r.required_mood_types,
+        r.required_chapters,
+        r.required_tasks,
+        r.unlock_conditions,
         r.total_chapters,
         r.sort_order,
         COALESCE(ur.is_unlocked, 0) as is_unlocked,
@@ -34,6 +38,10 @@ class RoomRepository {
         r.unlock_condition,
         r.required_days,
         r.required_multi_segment_days,
+        r.required_mood_types,
+        r.required_chapters,
+        r.required_tasks,
+        r.unlock_conditions,
         r.total_chapters,
         COALESCE(ur.is_unlocked, 0) as is_unlocked,
         COALESCE(ur.current_chapter, 0) as current_chapter,
@@ -254,6 +262,69 @@ class RoomRepository {
     roomStmt.run(branchKey, userId, roomId);
     
     return true;
+  }
+
+  getMultiSegmentDays(userId) {
+    const stmt = db.prepare(`
+      SELECT COUNT(DISTINCT record_date) as count
+      FROM moods
+      WHERE user_id = ?
+      GROUP BY record_date
+      HAVING COUNT(DISTINCT time_segment) >= 3
+    `);
+    const rows = stmt.all(userId);
+    return rows.length;
+  }
+
+  getMoodTypeCount(userId) {
+    const stmt = db.prepare(`
+      SELECT COUNT(DISTINCT mood_type) as count
+      FROM moods
+      WHERE user_id = ?
+    `);
+    return stmt.get(userId).count || 0;
+  }
+
+  getTotalChaptersRead(userId) {
+    const stmt = db.prepare(`
+      SELECT COALESCE(SUM(max_chapter_reached), 0) as total
+      FROM user_room_branches
+      WHERE user_id = ?
+    `);
+    return stmt.get(userId).total || 0;
+  }
+
+  getCompletedTasks(userId, taskIds) {
+    if (!taskIds || taskIds.length === 0) return [];
+    
+    const placeholders = taskIds.map(() => '?').join(',');
+    const stmt = db.prepare(`
+      SELECT DISTINCT ut.task_id
+      FROM user_tasks ut
+      WHERE ut.user_id = ? 
+        AND ut.task_id IN (${placeholders})
+        AND ut.is_completed = 1
+    `);
+    const rows = stmt.all(userId, ...taskIds);
+    return rows.map(r => r.task_id);
+  }
+
+  getUnlockProgress(userId) {
+    return {
+      totalRecordDays: this.getRecordDays(userId),
+      multiSegmentDays: this.getMultiSegmentDays(userId),
+      moodTypeCount: this.getMoodTypeCount(userId),
+      totalChaptersRead: this.getTotalChaptersRead(userId)
+    };
+  }
+
+  getRecordDays(userId) {
+    const stmt = db.prepare(`
+      SELECT COUNT(DISTINCT record_date) as count
+      FROM moods
+      WHERE user_id = ?
+    `);
+    return stmt.get(userId).count || 0;
   }
 }
 

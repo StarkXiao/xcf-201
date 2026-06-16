@@ -39,12 +39,14 @@ const handleClose = () => {
 const icons = {
   success: CheckCircle,
   error: AlertCircle,
+  warning: AlertCircle,
   info: AlertCircle
 }
 
 const colors = {
   success: 'var(--color-success)',
   error: 'var(--color-error)',
+  warning: 'var(--color-warning)',
   info: 'var(--color-accent)'
 }
 </script>
@@ -58,7 +60,7 @@ const colors = {
         :style="{ '--toast-color': colors[type] }"
       >
         <component :is="icons[type]" class="toast-icon" />
-        <span class="toast-message">{{ message }}</span>
+        <span class="toast-message" v-html="message.replace(/\n/g, '<br/>')"></span>
         <button class="toast-close" @click="handleClose">
           <X class="close-icon" />
         </button>
@@ -98,6 +100,8 @@ const colors = {
   flex: 1;
   color: var(--color-text);
   font-weight: 500;
+  line-height: 1.6;
+  white-space: pre-line;
 }
 
 .toast-close {

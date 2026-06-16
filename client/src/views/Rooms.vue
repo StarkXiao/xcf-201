@@ -2,7 +2,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/room'
-import { Lock, Unlock, ChevronRight, DoorOpen } from 'lucide-vue-next'
+import { Lock, Unlock, ChevronRight, DoorOpen, Calendar, BookOpen, Heart, CheckCircle, Target, Sparkles } from 'lucide-vue-next'
 import NotificationToast from '@/components/NotificationToast.vue'
 
 const router = useRouter()
@@ -12,6 +12,7 @@ const showToast = ref(false)
 const toastType = ref('success')
 const toastMessage = ref('')
 const isLoading = ref(false)
+const unlockingRoomId = ref(null)
 
 const rooms = computed(() => roomStore.rooms)
 const unlockedCount = computed(() => roomStore.unlockedCount)
@@ -26,20 +27,92 @@ const roomGradients = [
   'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)'
 ]
 
+const conditionConfig = {
+  days: { label: '记录天数', icon: Calendar, color: '#e8b4d9' },
+  multiSegmentDays: { label: '多段记录', icon: Sparkles, color: '#a3c4f3' },
+  moodTypeCount: { label: '情绪类型', icon: Heart, color: '#ec4899' },
+  chapters: { label: '阅读章节', icon: BookOpen, color: '#34d399' },
+  tasks: { label: '完成任务', icon: Target, color: '#fbbf24' }
+}
+
 async function loadRooms() {
   isLoading.value = true
   await roomStore.fetchRooms()
   isLoading.value = false
 }
 
-function goToRoom(room) {
-  if (!room.isUnlocked) {
-    toastType.value = 'error'
-    toastMessage.value = `还需要记录 ${room.requiredDays} 天心情才能解锁这个房间`
-    showToast.value = true
+function getConditionIcon(key) {
+  return conditionConfig[key]?.icon || Calendar
+}
+
+function getConditionLabel(key) {
+  return conditionConfig[key]?.label || key
+}
+
+function getConditionColor(key) {
+  return conditionConfig[key]?.color || '#e8b4d9'
+}
+
+function getAllConditionsMet(room) {
+  if (!room.conditionProgress) return true
+  return Object.values(room.conditionProgress).every(c => c.met)
+}
+
+function getUnmetConditions(room) {
+  if (!room.conditionProgress) return []
+  return Object.entries(room.conditionProgress)
+    .filter(([_, c]) => !c.met)
+    .map(([key, c]) => ({ key, ...c }))
+}
+
+function getUnlockTooltip(room) {
+  const unmet = getUnmetConditions(room)
+  if (unmet.length === 0) return '点击解锁'
+  return unmet.map(c => `${getConditionLabel(c.key)}: ${c.current} / ${c.target}`).join('\n')
+}
+
+async function handleRoomClick(room) {
+  if (room.isUnlocked) {
+    router.push(`/rooms/${room.id}`)
     return
   }
-  router.push(`/rooms/${room.id}`)
+  
+  if (!getAllConditionsMet(room)) {
+    showUnlockConditionsToast(room)
+    return
+  }
+  
+  await tryUnlockRoom(room)
+}
+
+function showUnlockConditionsToast(room) {
+  const unmet = getUnmetConditions(room)
+  const messages = unmet.map(c => `• ${getConditionLabel(c.key)}: ${c.current} / ${c.target}`)
+  
+  toastType.value = 'warning'
+  toastMessage.value = `解锁「${room.name}」还需要：\n${messages.join('\n')}`
+  showToast.value = true
+}
+
+async function tryUnlockRoom(room) {
+  unlockingRoomId.value = room.id
+  
+  const result = await roomStore.unlockRoom(room.id)
+  
+  unlockingRoomId.value = null
+  
+  if (result.success) {
+    toastType.value = 'success'
+    toastMessage.value = `🎉 「${room.name}」解锁成功！`
+    showToast.value = true
+    await loadRooms()
+  } else {
+    toastType.value = 'error'
+    toastMessage.value = result.details?.length 
+      ? `解锁失败：\n${result.details.join('\n')}`
+      : result.message || '解锁失败'
+    showToast.value = true
+  }
 }
 
 onMounted(() => {
@@ -70,25 +143,34 @@ onMounted(() => {
         v-for="(room, index) in rooms"
         :key="room.id"
         class="room-card glass-card"
-        :class="{ 'locked': !room.isUnlocked }"
-        @click="goToRoom(room)"
+        :class="{ 
+          'locked': !room.isUnlocked,
+          'ready-to-unlock': !room.isUnlocked && getAllConditionsMet(room),
+          'unlocking': unlockingRoomId === room.id
+        }"
+        :title="!room.isUnlocked ? getUnlockTooltip(room) : ''"
+        @click="handleRoomClick(room)"
       >
         <div class="room-cover" :style="{ background: roomGradients[index % roomGradients.length] }">
           <div class="cover-overlay">
             <component 
               :is="room.isUnlocked ? Unlock : Lock" 
               class="lock-icon"
-              :class="{ 'unlocked': room.isUnlocked }"
+              :class="{ 'unlocked': room.isUnlocked, 'ready': !room.isUnlocked && getAllConditionsMet(room) }"
             />
+            <div v-if="unlockingRoomId === room.id" class="unlocking-spinner"></div>
           </div>
           <div class="room-number">房间 {{ index + 1 }}</div>
+          <div v-if="!room.isUnlocked && room.conditionProgress" class="condition-badge">
+            <span>{{ Object.values(room.conditionProgress).filter(c => c.met).length }} / {{ Object.keys(room.conditionProgress).length }}</span>
+          </div>
         </div>
         
         <div class="room-content">
           <h3 class="room-title">{{ room.name }}</h3>
           <p class="room-description">{{ room.description }}</p>
           
-          <div class="room-meta">
+          <div v-if="room.isUnlocked" class="room-meta">
             <div class="progress-bar-container">
               <div class="progress-label">
                 <span>阅读进度</span>
@@ -103,9 +185,63 @@ onMounted(() => {
             </div>
           </div>
           
+          <div v-if="!room.isUnlocked && room.conditionProgress" class="unlock-conditions">
+            <div class="conditions-header">
+              <span class="conditions-title">解锁条件</span>
+              <span class="conditions-count">
+                {{ Object.values(room.conditionProgress).filter(c => c.met).length }} / {{ Object.keys(room.conditionProgress).length }}
+              </span>
+            </div>
+            <div class="conditions-list">
+              <div 
+                v-for="(condition, key) in room.conditionProgress" 
+                :key="key"
+                class="condition-item"
+                :class="{ 'met': condition.met }"
+              >
+                <div class="condition-icon" :style="{ color: getConditionColor(key) }">
+                  <component :is="getConditionIcon(key)" class="icon" />
+                </div>
+                <div class="condition-info">
+                  <div class="condition-label">{{ getConditionLabel(key) }}</div>
+                  <div class="condition-progress">
+                    <div class="condition-progress-bar-bg">
+                      <div 
+                        class="condition-progress-bar"
+                        :style="{ 
+                          width: `${Math.min(100, (condition.current / condition.target) * 100)}%`,
+                          backgroundColor: getConditionColor(key)
+                        }"
+                      ></div>
+                    </div>
+                    <span class="condition-progress-text">{{ condition.current }} / {{ condition.target }}</span>
+                  </div>
+                </div>
+                <CheckCircle v-if="condition.met" class="condition-check" />
+              </div>
+            </div>
+          </div>
+          
           <div class="room-footer">
-            <span class="unlock-condition" :class="{ 'met': room.isUnlocked }">
-              {{ room.unlockCondition }}
+            <span 
+              class="unlock-condition" 
+              :class="{ 
+                'met': room.isUnlocked,
+                'ready': !room.isUnlocked && getAllConditionsMet(room)
+              }"
+            >
+              <template v-if="room.isUnlocked">
+                <Unlock class="footer-icon" />
+                已解锁
+              </template>
+              <template v-else-if="getAllConditionsMet(room)">
+                <Sparkles class="footer-icon" />
+                点击解锁
+              </template>
+              <template v-else>
+                <Lock class="footer-icon" />
+                {{ room.unlockCondition }}
+              </template>
             </span>
             <ChevronRight class="arrow-icon" />
           </div>
@@ -196,7 +332,7 @@ onMounted(() => {
 
 .rooms-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   gap: 24px;
 }
 
@@ -211,11 +347,29 @@ onMounted(() => {
   }
   
   &.locked {
-    opacity: 0.8;
+    opacity: 0.9;
     
     .room-cover {
-      filter: grayscale(0.5);
+      filter: grayscale(0.3);
     }
+  }
+  
+  &.ready-to-unlock {
+    border-color: rgba(74, 222, 128, 0.4);
+    box-shadow: 0 0 20px rgba(74, 222, 128, 0.15);
+    
+    .room-cover {
+      filter: none;
+    }
+    
+    &:hover {
+      box-shadow: 0 0 30px rgba(74, 222, 128, 0.25);
+    }
+  }
+  
+  &.unlocking {
+    pointer-events: none;
+    opacity: 0.7;
   }
 }
 
@@ -247,11 +401,31 @@ onMounted(() => {
   &.unlocked {
     animation: unlockPulse 2s ease-in-out infinite;
   }
+  
+  &.ready {
+    color: #4ade80;
+    animation: readyPulse 1.5s ease-in-out infinite;
+  }
 }
 
 @keyframes unlockPulse {
   0%, 100% { transform: scale(1); }
   50% { transform: scale(1.1); }
+}
+
+@keyframes readyPulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.15); opacity: 0.8; }
+}
+
+.unlocking-spinner {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border: 3px solid rgba(255, 255, 255, 0.2);
+  border-top-color: var(--color-secondary);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
 }
 
 .room-number {
@@ -264,6 +438,18 @@ onMounted(() => {
   color: white;
   font-size: 0.85rem;
   font-weight: 500;
+}
+
+.condition-badge {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  padding: 6px 12px;
+  background: rgba(0, 0, 0, 0.5);
+  border-radius: var(--radius-full);
+  color: white;
+  font-size: 0.8rem;
+  font-weight: 600;
 }
 
 .room-content {
@@ -318,6 +504,121 @@ onMounted(() => {
   transition: width 0.5s ease;
 }
 
+.unlock-conditions {
+  margin-bottom: 16px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.conditions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.conditions-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--color-text-secondary);
+}
+
+.conditions-count {
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  background: rgba(232, 180, 217, 0.15);
+  border-radius: var(--radius-full);
+  color: var(--color-secondary);
+}
+
+.conditions-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.condition-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  transition: all var(--transition-fast);
+  
+  &.met {
+    background: rgba(74, 222, 128, 0.05);
+  }
+}
+
+.condition-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  
+  .icon {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.condition-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.condition-label {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+}
+
+.condition-progress {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.condition-progress-bar-bg {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.condition-progress-bar {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.5s ease;
+  opacity: 0.8;
+}
+
+.condition-progress-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  min-width: 50px;
+  text-align: right;
+  
+  .condition-item.met & {
+    color: var(--color-success);
+  }
+}
+
+.condition-check {
+  width: 18px;
+  height: 18px;
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
 .room-footer {
   display: flex;
   justify-content: space-between;
@@ -329,10 +630,28 @@ onMounted(() => {
 .unlock-condition {
   font-size: 0.85rem;
   color: var(--color-warning);
+  display: flex;
+  align-items: center;
+  gap: 6px;
   
   &.met {
     color: var(--color-success);
   }
+  
+  &.ready {
+    color: var(--color-success);
+    animation: readyBlink 1.5s ease-in-out infinite;
+  }
+  
+  .footer-icon {
+    width: 14px;
+    height: 14px;
+  }
+}
+
+@keyframes readyBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
 }
 
 .arrow-icon {

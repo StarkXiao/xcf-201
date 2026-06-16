@@ -51,13 +51,49 @@ const migrate = db.transaction(() => {
 
   const roomColumns = db.prepare("PRAGMA table_info(rooms)").all();
   const hasMultiSegmentDays = roomColumns.some(c => c.name === 'required_multi_segment_days');
+  const hasRequiredMoodTypes = roomColumns.some(c => c.name === 'required_mood_types');
+  const hasRequiredChapters = roomColumns.some(c => c.name === 'required_chapters');
+  const hasRequiredTasks = roomColumns.some(c => c.name === 'required_tasks');
+  const hasUnlockConditions = roomColumns.some(c => c.name === 'unlock_conditions');
 
   if (!hasMultiSegmentDays) {
     console.log('📝 为 rooms 表添加 required_multi_segment_days 字段...');
     db.exec('ALTER TABLE rooms ADD COLUMN required_multi_segment_days INTEGER DEFAULT 0');
-    console.log('✅ rooms 表字段添加完成');
+    console.log('✅ required_multi_segment_days 字段添加完成');
   } else {
     console.log('⚠️  rooms 表已包含 required_multi_segment_days 字段，跳过');
+  }
+
+  if (!hasRequiredMoodTypes) {
+    console.log('📝 为 rooms 表添加 required_mood_types 字段...');
+    db.exec('ALTER TABLE rooms ADD COLUMN required_mood_types TEXT DEFAULT NULL');
+    console.log('✅ required_mood_types 字段添加完成');
+  } else {
+    console.log('⚠️  rooms 表已包含 required_mood_types 字段，跳过');
+  }
+
+  if (!hasRequiredChapters) {
+    console.log('📝 为 rooms 表添加 required_chapters 字段...');
+    db.exec('ALTER TABLE rooms ADD COLUMN required_chapters INTEGER DEFAULT 0');
+    console.log('✅ required_chapters 字段添加完成');
+  } else {
+    console.log('⚠️  rooms 表已包含 required_chapters 字段，跳过');
+  }
+
+  if (!hasRequiredTasks) {
+    console.log('📝 为 rooms 表添加 required_tasks 字段...');
+    db.exec('ALTER TABLE rooms ADD COLUMN required_tasks TEXT DEFAULT NULL');
+    console.log('✅ required_tasks 字段添加完成');
+  } else {
+    console.log('⚠️  rooms 表已包含 required_tasks 字段，跳过');
+  }
+
+  if (!hasUnlockConditions) {
+    console.log('📝 为 rooms 表添加 unlock_conditions 字段...');
+    db.exec('ALTER TABLE rooms ADD COLUMN unlock_conditions TEXT DEFAULT NULL');
+    console.log('✅ unlock_conditions 字段添加完成');
+  } else {
+    console.log('⚠️  rooms 表已包含 unlock_conditions 字段，跳过');
   }
 
   const indexStmt = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_moods_time_segment'");
@@ -102,13 +138,21 @@ const migrate = db.transaction(() => {
   const roomUpdates = db.prepare(`
     UPDATE rooms SET 
       unlock_condition = ?,
-      required_multi_segment_days = ?
+      required_days = ?,
+      required_multi_segment_days = ?,
+      required_mood_types = ?,
+      required_chapters = ?,
+      required_tasks = ?,
+      unlock_conditions = ?
     WHERE id = ?
   `);
   
-  roomUpdates.run('多段记录 5 天', 5, 4);
-  roomUpdates.run('多段记录 10 天', 10, 5);
-  roomUpdates.run('多段记录 15 天', 15, 6);
+  roomUpdates.run('默认解锁', 0, 0, NULL, 0, NULL, NULL, 1);
+  roomUpdates.run('记录心情 3 天，体验 2 种情绪', 3, 0, '["happy","calm","sad","anxious","angry"]', 0, NULL, '{"moodTypeCount":2}', 2);
+  roomUpdates.run('记录心情 7 天，阅读 3 个章节', 7, 0, NULL, 3, NULL, '{"chapters":3}', 3);
+  roomUpdates.run('多段记录 5 天，完成「心情随笔」任务', 0, 5, NULL, 0, '[2]', '{"multiSegmentDays":5,"tasks":[2]}', 4);
+  roomUpdates.run('多段记录 10 天，体验 4 种情绪，阅读 5 个章节', 0, 10, '["happy","calm","sad","anxious","angry"]', 5, NULL, '{"multiSegmentDays":10,"moodTypeCount":4,"chapters":5}', 5);
+  roomUpdates.run('多段记录 15 天，完成 3 个长期任务，阅读 10 个章节', 0, 15, NULL, 10, '[3,4,5]', '{"multiSegmentDays":15,"chapters":10,"tasks":[3,4,5]}', 6);
   console.log('✅ 房间解锁条件更新完成');
 
   // 迁移 stories 表 - 添加分支字段
