@@ -49,9 +49,14 @@ export const moodApi = {
 
 export const roomApi = {
   getRooms: () => api.get('/rooms'),
-  getRoomDetail: (id) => api.get(`/rooms/${id}`),
+  getRoomDetail: (id, branch = null) => api.get(`/rooms/${id}`, { params: branch ? { branch } : {} }),
   unlockRoom: (id) => api.post(`/rooms/${id}/unlock`),
-  readChapter: (roomId, chapter) => api.post(`/rooms/${roomId}/chapters/${chapter}/read`)
+  readChapter: (roomId, chapter, branch = null) => api.post(`/rooms/${roomId}/chapters/${chapter}/read`, { branch }),
+  getBranches: (roomId) => api.get(`/rooms/${roomId}/branches`),
+  getBranchDetail: (roomId, branch) => api.get(`/rooms/${roomId}/branches/${branch}`),
+  chooseBranch: (roomId, branch) => api.post(`/rooms/${roomId}/branches/${branch}/choose`),
+  getStoryHistory: (roomId) => api.get(`/rooms/${roomId}/history`),
+  jumpToStory: (roomId, storyId) => api.post(`/rooms/${roomId}/jump/${storyId}`)
 }
 
 export const achievementApi = {

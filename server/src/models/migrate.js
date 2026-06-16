@@ -110,6 +110,117 @@ const migrate = db.transaction(() => {
   roomUpdates.run('多段记录 10 天', 10, 5);
   roomUpdates.run('多段记录 15 天', 15, 6);
   console.log('✅ 房间解锁条件更新完成');
+
+  // 迁移 stories 表 - 添加分支字段
+  const storyColumns = db.prepare("PRAGMA table_info(stories)").all();
+  const hasBranchKey = storyColumns.some(c => c.name === 'branch_key');
+  const hasParentId = storyColumns.some(c => c.name === 'parent_id');
+
+  if (!hasBranchKey || !hasParentId) {
+    console.log('📝 迁移 stories 表，添加分支结构字段...');
+    
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS stories_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        room_id INTEGER NOT NULL,
+        chapter_number INTEGER NOT NULL,
+        branch_key VARCHAR(50) NOT NULL DEFAULT 'main',
+        parent_id INTEGER DEFAULT NULL,
+        title VARCHAR(200) NOT NULL,
+        content TEXT NOT NULL,
+        conditions TEXT,
+        branch_label VARCHAR(100),
+        is_branch_point BOOLEAN DEFAULT 0,
+        is_ending BOOLEAN DEFAULT 0,
+        sort_order INTEGER DEFAULT 0,
+        FOREIGN KEY (room_id) REFERENCES rooms(id),
+        FOREIGN KEY (parent_id) REFERENCES stories(id)
+      )
+    `);
+
+    db.exec(`
+      INSERT INTO stories_new (id, room_id, chapter_number, title, content, sort_order)
+      SELECT id, room_id, chapter_number, title, content, chapter_number as sort_order
+      FROM stories
+    `);
+
+    db.exec('DROP TABLE IF EXISTS stories');
+    db.exec('ALTER TABLE stories_new RENAME TO stories');
+    
+    console.log('✅ stories 表迁移完成');
+  } else {
+    console.log('⚠️  stories 表已包含分支字段，跳过迁移');
+  }
+
+  // 创建 user_room_branches 表
+  const branchesTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user_room_branches'").get();
+  if (!branchesTableExists) {
+    console.log('📝 创建 user_room_branches 表...');
+    db.exec(`
+      CREATE TABLE user_room_branches (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        room_id INTEGER NOT NULL,
+        branch_key VARCHAR(50) NOT NULL,
+        current_story_id INTEGER,
+        max_chapter_reached INTEGER DEFAULT 0,
+        is_active BOOLEAN DEFAULT 0,
+        last_read_at DATETIME,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (room_id) REFERENCES rooms(id),
+        FOREIGN KEY (current_story_id) REFERENCES stories(id),
+        UNIQUE(user_id, room_id, branch_key)
+      )
+    `);
+    console.log('✅ user_room_branches 表创建完成');
+  } else {
+    console.log('⚠️  user_room_branches 表已存在，跳过');
+  }
+
+  // 创建 user_story_history 表
+  const historyTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='user_story_history'").get();
+  if (!historyTableExists) {
+    console.log('📝 创建 user_story_history 表...');
+    db.exec(`
+      CREATE TABLE user_story_history (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        room_id INTEGER NOT NULL,
+        story_id INTEGER NOT NULL,
+        branch_key VARCHAR(50) NOT NULL,
+        read_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (room_id) REFERENCES rooms(id),
+        FOREIGN KEY (story_id) REFERENCES stories(id)
+      )
+    `);
+    console.log('✅ user_story_history 表创建完成');
+  } else {
+    console.log('⚠️  user_story_history 表已存在，跳过');
+  }
+
+  // 为 user_rooms 表添加 current_branch 字段
+  const userRoomColumns = db.prepare("PRAGMA table_info(user_rooms)").all();
+  const hasCurrentBranch = userRoomColumns.some(c => c.name === 'current_branch');
+
+  if (!hasCurrentBranch) {
+    console.log('📝 为 user_rooms 表添加 current_branch 字段...');
+    db.exec("ALTER TABLE user_rooms ADD COLUMN current_branch VARCHAR(50) DEFAULT 'main'");
+    console.log('✅ user_rooms 表字段添加完成');
+  } else {
+    console.log('⚠️  user_rooms 表已包含 current_branch 字段，跳过');
+  }
+
+  // 创建分支相关索引
+  const branchIndexExists = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_stories_branch_key'").get();
+  if (!branchIndexExists) {
+    console.log('📝 创建分支相关索引...');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_stories_branch_key ON stories(branch_key)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_stories_parent_id ON stories(parent_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_user_room_branches_user ON user_room_branches(user_id, room_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_user_story_history_user ON user_story_history(user_id, room_id)');
+    console.log('✅ 分支相关索引创建完成');
+  }
 });
 
 try {
