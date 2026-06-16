@@ -16,12 +16,14 @@ CREATE TABLE IF NOT EXISTS moods (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL,
   record_date DATE NOT NULL,
+  time_segment VARCHAR(20) NOT NULL DEFAULT 'day',
   mood_type VARCHAR(20) NOT NULL,
   content TEXT,
   tags VARCHAR(500),
+  tag_weights TEXT,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id),
-  UNIQUE(user_id, record_date)
+  UNIQUE(user_id, record_date, time_segment)
 );
 
 -- 房间表
@@ -33,6 +35,7 @@ CREATE TABLE IF NOT EXISTS rooms (
   unlock_condition VARCHAR(255),
   required_days INTEGER DEFAULT 0,
   required_mood_type VARCHAR(20),
+  required_multi_segment_days INTEGER DEFAULT 0,
   total_chapters INTEGER DEFAULT 1,
   sort_order INTEGER DEFAULT 0
 );

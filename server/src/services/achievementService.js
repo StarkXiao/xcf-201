@@ -100,7 +100,12 @@ class AchievementService {
       'check_in_streak': `连续记录 ${conditionValue} 天`,
       'rooms_unlocked': `解锁 ${conditionValue} 个房间`,
       'chapters_read': `阅读 ${conditionValue} 个故事章节`,
-      'all_achievements': '完成所有成就'
+      'all_achievements': '完成所有成就',
+      'morning_records': `完成 ${conditionValue} 次早晨时段心情记录`,
+      'afternoon_records': `完成 ${conditionValue} 次下午时段心情记录`,
+      'evening_records': `完成 ${conditionValue} 次晚间时段心情记录`,
+      'multi_segment_streak': `连续 ${conditionValue} 天完成三段心情记录`,
+      'tag_weight_count': `累计设置 ${conditionValue} 个标签权重`
     };
     
     return conditionMap[conditionType] || `${conditionType} ${conditionValue}`;

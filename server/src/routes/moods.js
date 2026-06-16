@@ -4,11 +4,28 @@ const { getCurrentUser } = require('../middleware/auth');
 
 const router = new Router({ prefix: '/api/moods' });
 
+router.get('/config', async (ctx) => {
+  const config = moodService.getConfig();
+  ctx.body = {
+    code: 200,
+    message: 'success',
+    data: config
+  };
+});
+
 router.post('/', async (ctx) => {
   const user = getCurrentUser(ctx);
-  const { date, moodType, content, tags } = ctx.request.body;
+  const { date, timeSegment, moodType, content, tags, tagWeights } = ctx.request.body;
   
-  const result = moodService.createMood(user.userId, date, moodType, content, tags);
+  const result = moodService.createMood(
+    user.userId, 
+    date, 
+    timeSegment, 
+    moodType, 
+    content, 
+    tags, 
+    tagWeights
+  );
   
   ctx.body = {
     code: 200,
@@ -46,8 +63,9 @@ router.get('/:date', async (ctx) => {
 router.delete('/:date', async (ctx) => {
   const user = getCurrentUser(ctx);
   const { date } = ctx.params;
+  const { timeSegment } = ctx.request.body || {};
   
-  const success = moodService.deleteMood(user.userId, date);
+  const success = moodService.deleteMood(user.userId, date, timeSegment);
   
   ctx.body = {
     code: 200,

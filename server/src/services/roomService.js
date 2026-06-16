@@ -16,6 +16,7 @@ class RoomService {
       coverImage: room.cover_image,
       unlockCondition: room.unlock_condition,
       requiredDays: room.required_days,
+      requiredMultiSegmentDays: room.required_multi_segment_days,
       isUnlocked: !!room.is_unlocked,
       progress: room.current_chapter,
       totalChapters: room.total_chapters,

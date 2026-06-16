@@ -40,10 +40,11 @@ export const authApi = {
 }
 
 export const moodApi = {
+  getConfig: () => api.get('/moods/config'),
   createMood: (data) => api.post('/moods', data),
   getMoods: (year, month) => api.get('/moods', { params: { year, month } }),
   getMoodByDate: (date) => api.get(`/moods/${date}`),
-  deleteMood: (date) => api.delete(`/moods/${date}`)
+  deleteMood: (date, timeSegment) => api.delete(`/moods/${date}`, { data: { timeSegment } })
 }
 
 export const roomApi = {

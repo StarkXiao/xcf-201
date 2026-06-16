@@ -1,7 +1,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useMoodStore } from '@/stores/mood'
-import { ChevronLeft, ChevronRight, Plus, Flame, BarChart3 } from 'lucide-vue-next'
+import { ChevronLeft, ChevronRight, Plus, Flame, BarChart3, Layers, Target } from 'lucide-vue-next'
 import MoodModal from '@/components/MoodModal.vue'
 import NotificationToast from '@/components/NotificationToast.vue'
 
@@ -32,6 +32,13 @@ const moodEmojis = {
   angry: '😠'
 }
 
+const segmentEmojis = {
+  morning: '🌅',
+  afternoon: '☀️',
+  evening: '🌙',
+  day: '📅'
+}
+
 const currentYear = computed(() => currentDate.value.getFullYear())
 const currentMonth = computed(() => currentDate.value.getMonth() + 1)
 
@@ -54,15 +61,26 @@ const calendarDays = computed(() => {
   
   for (let i = 1; i <= lastDay.getDate(); i++) {
     const dateStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`
-    const moodRecord = moodStore.moods.find(m => m.record_date === dateStr)
+    
+    const aggregate = moodStore.getAggregateByDate(dateStr)
+    const dayRecords = moodStore.moods.filter(m => m.record_date === dateStr)
+    const segments = dayRecords.filter(m => ['morning', 'afternoon', 'evening'].includes(m.time_segment))
+    
+    const recordedSegments = new Set(segments.map(s => s.time_segment))
+    const segmentProgress = recordedSegments.size
+    
+    const dominantMood = aggregate?.dominantMood || (dayRecords.length > 0 ? dayRecords[0].mood_type : null)
     
     days.push({
       day: i,
       date: dateStr,
       isCurrentMonth: true,
       isToday: isToday(dateStr),
-      mood: moodRecord?.mood_type,
-      moodRecord
+      dominantMood,
+      segmentProgress,
+      totalSegments: 3,
+      aggregate,
+      segments: dayRecords
     })
   }
   
@@ -90,11 +108,12 @@ function nextMonth() {
   loadMoods()
 }
 
-function openModal(day) {
+async function openModal(day) {
   if (!day.isCurrentMonth) return
   
   selectedDate.value = day.date
-  existingMood.value = day.moodRecord || null
+  existingMood.value = await moodStore.fetchMoodByDate(day.date)
+  existingMood.value = existingMood.value.data
   showModal.value = true
 }
 
@@ -104,11 +123,19 @@ async function handleSubmit(moodData) {
   const result = await moodStore.createMood(moodData)
   
   isLoading.value = false
-  showModal.value = false
   
   if (result.success) {
     toastType.value = 'success'
-    toastMessage.value = '心情记录成功！'
+    
+    const segments = result.data.dayAggregate?.segments || []
+    const mainSegments = segments.filter(s => ['morning', 'afternoon', 'evening'].includes(s.time_segment))
+    
+    if (mainSegments.length >= 3) {
+      toastMessage.value = '🎉 完成今日三段心情记录！'
+    } else {
+      toastMessage.value = `心情记录成功！已记录 ${mainSegments.length}/3 时段`
+    }
+    
     showToast.value = true
     
     if (result.data.newlyUnlockedRooms?.length > 0) {
@@ -128,10 +155,28 @@ async function handleSubmit(moodData) {
     }
     
     loadMoods()
+    
+    existingMood.value = await moodStore.fetchMoodByDate(moodData.date)
+    existingMood.value = existingMood.value.data
   } else {
     toastType.value = 'error'
     toastMessage.value = result.message
     showToast.value = true
+  }
+}
+
+async function handleDelete(deleteData) {
+  const result = await moodStore.deleteMood(deleteData.date, deleteData.timeSegment)
+  
+  if (result.success) {
+    toastType.value = 'success'
+    toastMessage.value = '已删除该时段的心情记录'
+    showToast.value = true
+    
+    loadMoods()
+    
+    existingMood.value = await moodStore.fetchMoodByDate(deleteData.date)
+    existingMood.value = existingMood.value.data
   }
 }
 
@@ -141,8 +186,9 @@ async function loadMoods() {
 
 const stats = computed(() => moodStore.stats)
 
-onMounted(() => {
-  loadMoods()
+onMounted(async () => {
+  await moodStore.fetchConfig()
+  await loadMoods()
 })
 </script>
 
@@ -164,10 +210,24 @@ onMounted(() => {
         </div>
       </div>
       <div class="stat-card glass-card">
+        <Layers class="stat-icon layers" />
+        <div class="stat-info">
+          <span class="stat-value">{{ stats?.multiSegmentStreak || 0 }}</span>
+          <span class="stat-label">三段连续</span>
+        </div>
+      </div>
+      <div class="stat-card glass-card">
         <BarChart3 class="stat-icon chart" />
         <div class="stat-info">
           <span class="stat-value">{{ stats?.totalThisMonth || 0 }}</span>
           <span class="stat-label">本月记录</span>
+        </div>
+      </div>
+      <div class="stat-card glass-card">
+        <Target class="stat-icon target" />
+        <div class="stat-info">
+          <span class="stat-value">{{ stats?.multiSegmentDays || 0 }}</span>
+          <span class="stat-label">完整天数</span>
         </div>
       </div>
     </div>
@@ -202,21 +262,37 @@ onMounted(() => {
           :class="{
             'other-month': !day.isCurrentMonth,
             'today': day.isToday,
-            'has-mood': day.mood
+            'has-mood': day.dominantMood,
+            'complete': day.segmentProgress >= 3
           }"
           @click="openModal(day)"
         >
           <span v-if="day.day" class="day-number">{{ day.day }}</span>
-          <div v-if="day.mood" class="mood-indicator" :style="{ backgroundColor: moodColors[day.mood] }">
-            <span class="mood-emoji">{{ moodEmojis[day.mood] }}</span>
+          
+          <div v-if="day.dominantMood" class="mood-indicator" :style="{ backgroundColor: moodColors[day.dominantMood] }">
+            <span class="mood-emoji">{{ moodEmojis[day.dominantMood] }}</span>
           </div>
+          
+          <div v-if="day.isCurrentMonth && day.segmentProgress > 0" class="segment-progress">
+            <div 
+              v-for="seg in 3" 
+              :key="seg"
+              class="segment-dot"
+              :class="{ filled: seg <= day.segmentProgress }"
+            ></div>
+          </div>
+          
           <button 
-            v-if="day.isToday && !day.mood" 
+            v-if="day.isToday && !day.dominantMood" 
             class="add-mood-btn"
             @click.stop="openModal(day)"
           >
             <Plus class="add-icon" />
           </button>
+          
+          <div v-if="day.segmentProgress >= 3" class="complete-badge">
+            ✨
+          </div>
         </div>
       </div>
     </div>
@@ -237,11 +313,28 @@ onMounted(() => {
             <div 
               class="distribution-bar"
               :style="{ 
-                width: `${(count / stats.totalThisMonth) * 100}%`,
+                width: `${(count / (stats.totalThisMonth || 1)) * 100}%`,
                 backgroundColor: moodColors[type]
               }"
             ></div>
           </div>
+        </div>
+      </div>
+    </div>
+    
+    <div v-if="stats?.segmentDistribution" class="segment-stats glass-card">
+      <h3 class="section-title">时段统计</h3>
+      <div class="segment-grid">
+        <div 
+          v-for="(count, segment) in stats.segmentDistribution" 
+          :key="segment"
+          class="segment-item"
+        >
+          <span class="segment-emoji">{{ segmentEmojis[segment] }}</span>
+          <span class="segment-label">
+            {{ segment === 'morning' ? '早晨' : segment === 'afternoon' ? '下午' : segment === 'evening' ? '晚间' : '全天' }}
+          </span>
+          <span class="segment-count">{{ count }} 次</span>
         </div>
       </div>
     </div>
@@ -252,6 +345,7 @@ onMounted(() => {
       :existing-mood="existingMood"
       @close="showModal = false"
       @submit="handleSubmit"
+      @delete="handleDelete"
     />
     
     <NotificationToast
@@ -284,7 +378,7 @@ onMounted(() => {
 
 .stats-cards {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -310,6 +404,16 @@ onMounted(() => {
   &.chart {
     background: rgba(123, 163, 201, 0.15);
     color: var(--color-accent);
+  }
+  
+  &.layers {
+    background: rgba(232, 180, 217, 0.15);
+    color: var(--color-secondary);
+  }
+  
+  &.target {
+    background: rgba(74, 222, 128, 0.15);
+    color: var(--color-success);
   }
 }
 
@@ -426,6 +530,11 @@ onMounted(() => {
   &.has-mood {
     background: rgba(255, 255, 255, 0.08);
   }
+  
+  &.complete {
+    background: rgba(74, 222, 128, 0.1);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+  }
 }
 
 .day-number {
@@ -446,6 +555,25 @@ onMounted(() => {
 
 .mood-emoji {
   font-size: 1rem;
+}
+
+.segment-progress {
+  display: flex;
+  gap: 3px;
+  margin-top: 4px;
+}
+
+.segment-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  transition: all var(--transition-normal);
+  
+  &.filled {
+    background: var(--color-secondary);
+    box-shadow: 0 0 6px rgba(232, 180, 217, 0.5);
+  }
 }
 
 .add-mood-btn {
@@ -469,8 +597,17 @@ onMounted(() => {
   height: 16px;
 }
 
-.mood-distribution {
+.complete-badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  font-size: 0.8rem;
+}
+
+.mood-distribution,
+.segment-stats {
   padding: 24px;
+  margin-bottom: 24px;
 }
 
 .section-title {
@@ -520,13 +657,50 @@ onMounted(() => {
   transition: width 0.5s ease;
 }
 
+.segment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.segment-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+}
+
+.segment-emoji {
+  font-size: 1.5rem;
+}
+
+.segment-label {
+  flex: 1;
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+}
+
+.segment-count {
+  font-weight: 600;
+  color: var(--color-secondary);
+  font-family: var(--font-display);
+}
+
 @media (max-width: 768px) {
   .stats-cards {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, 1fr);
   }
   
   .calendar-container,
-  .mood-distribution {
+  .mood-distribution,
+  .segment-stats {
     padding: 16px;
   }
   
@@ -541,6 +715,10 @@ onMounted(() => {
   
   .mood-emoji {
     font-size: 0.85rem;
+  }
+  
+  .segment-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

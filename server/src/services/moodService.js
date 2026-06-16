@@ -5,12 +5,21 @@ const achievementRepository = require('../repositories/achievementRepository');
 const taskRepository = require('../repositories/taskRepository');
 
 const VALID_MOOD_TYPES = ['happy', 'calm', 'sad', 'anxious', 'angry'];
+const VALID_SEGMENTS = ['morning', 'afternoon', 'evening', 'day'];
 
 class MoodService {
-  createMood(userId, date, moodType, content = '', tags = []) {
+  createMood(userId, date, timeSegment, moodType, content = '', tags = [], tagWeights = {}) {
     if (!date) {
       const today = new Date();
       date = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    }
+
+    if (!timeSegment) {
+      timeSegment = this.detectTimeSegment();
+    }
+    
+    if (!VALID_SEGMENTS.includes(timeSegment)) {
+      throw new Error('无效的时段，必须是 morning、afternoon、evening 或 day');
     }
     
     if (!VALID_MOOD_TYPES.includes(moodType)) {
@@ -22,22 +31,52 @@ class MoodService {
       throw new Error('日期格式不正确，请使用 YYYY-MM-DD 格式');
     }
     
-    const recordDate = new Date(date);
-    const today = new Date();
-    if (recordDate > today) {
-      throw new Error('不能记录未来的心情');
+    const backfillCheck = moodRepository.canBackfill(userId, date);
+    if (!backfillCheck.allowed) {
+      throw new Error(backfillCheck.reason);
+    }
+
+    if (tagWeights && typeof tagWeights === 'object') {
+      for (const tag in tagWeights) {
+        const weight = tagWeights[tag];
+        if (typeof weight !== 'number' || weight < 1 || weight > 5) {
+          throw new Error(`标签 "${tag}" 的权重必须在 1-5 之间`);
+        }
+      }
     }
     
-    const mood = moodRepository.create(userId, date, moodType, content, tags);
+    const mood = moodRepository.create(userId, date, timeSegment, moodType, content, tags, tagWeights);
     
     userRepository.updateStats(userId);
     
+    const today = new Date();
     const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
     
-    taskRepository.updateProgress(userId, 1, todayStr, 1);
+    const daySegments = moodRepository.findByDate(userId, date);
+    const segmentCount = daySegments.length;
     
-    if (content && content.length >= 50) {
+    taskRepository.updateProgress(userId, 1, todayStr, segmentCount > 0 ? 1 : 0);
+    
+    let totalContentLength = 0;
+    let totalTagWeight = 0;
+    daySegments.forEach(seg => {
+      if (seg.content) totalContentLength += seg.content.length;
+      if (seg.tag_weights) {
+        totalTagWeight += Object.values(seg.tag_weights).reduce((a, b) => a + b, 0);
+      }
+    });
+    
+    if (totalContentLength >= 50) {
       taskRepository.updateProgress(userId, 2, todayStr, 1);
+    }
+    
+    const mainSegments = daySegments.filter(s => ['morning', 'afternoon', 'evening'].includes(s.time_segment));
+    if (mainSegments.length >= 3) {
+      taskRepository.updateProgress(userId, 6, todayStr, 3);
+    }
+    
+    if (totalTagWeight >= 10) {
+      taskRepository.updateProgress(userId, 7, todayStr, Math.min(totalTagWeight, 10));
     }
     
     const streakDays = moodRepository.getStreakDays(userId);
@@ -50,17 +89,26 @@ class MoodService {
       taskRepository.updateProgress(userId, 4, todayStr, 5);
     }
     
+    const multiSegmentDays = moodRepository.getMultiSegmentDaysCount(userId);
+    if (multiSegmentDays >= 7) {
+      taskRepository.updateProgress(userId, 8, todayStr, 7);
+    }
+    
     const newlyUnlockedAchievements = [];
     
-    const totalMoods = moodRepository.findByMonth(userId, recordDate.getFullYear(), recordDate.getMonth() + 1).length;
-    const totalMoodsAll = userRepository.getStats(userId).total_moods;
+    const userStats = userRepository.getStats(userId);
     
     newlyUnlockedAchievements.push(
-      ...achievementRepository.checkAndUnlock(userId, 'total_moods', totalMoodsAll),
-      ...achievementRepository.checkAndUnlock(userId, 'check_in_streak', streakDays)
+      ...achievementRepository.checkAndUnlock(userId, 'total_moods', userStats.total_moods),
+      ...achievementRepository.checkAndUnlock(userId, 'check_in_streak', streakDays),
+      ...achievementRepository.checkAndUnlock(userId, 'morning_records', moodRepository.getSegmentCount(userId, 'morning')),
+      ...achievementRepository.checkAndUnlock(userId, 'afternoon_records', moodRepository.getSegmentCount(userId, 'afternoon')),
+      ...achievementRepository.checkAndUnlock(userId, 'evening_records', moodRepository.getSegmentCount(userId, 'evening')),
+      ...achievementRepository.checkAndUnlock(userId, 'multi_segment_streak', moodRepository.getMultiSegmentStreak(userId)),
+      ...achievementRepository.checkAndUnlock(userId, 'tag_weight_count', moodRepository.getTotalTagWeightCount(userId))
     );
     
-    const unlockedRooms = this.checkRoomUnlocks(userId, streakDays);
+    const unlockedRooms = this.checkRoomUnlocks(userId, streakDays, multiSegmentDays);
     
     const allAchievements = achievementRepository.getUserAchievements(userId);
     const unlockedCount = allAchievements.filter(a => a.is_unlocked).length;
@@ -71,24 +119,47 @@ class MoodService {
         ...achievementRepository.checkAndUnlock(userId, 'all_achievements', 1)
       );
     }
+
+    const recordDate = new Date(date);
     
     return {
       mood,
+      dayAggregate: moodRepository.getDayAggregate(userId, date),
       newlyUnlockedAchievements: newlyUnlockedAchievements.filter(a => a),
       newlyUnlockedRooms: unlockedRooms,
       stats: moodRepository.getStats(userId, recordDate.getFullYear(), recordDate.getMonth() + 1)
     };
   }
 
-  checkRoomUnlocks(userId, streakDays) {
+  detectTimeSegment() {
+    const hour = new Date().getHours();
+    if (hour >= 5 && hour < 12) return 'morning';
+    if (hour >= 12 && hour < 18) return 'afternoon';
+    if (hour >= 18 && hour < 24) return 'evening';
+    return 'day';
+  }
+
+  checkRoomUnlocks(userId, streakDays, multiSegmentDays) {
     const rooms = roomRepository.findAll(userId);
     const newlyUnlocked = [];
     
     for (const room of rooms) {
-      if (!room.is_unlocked && room.required_days > 0 && streakDays >= room.required_days) {
-        const result = roomRepository.unlockRoom(userId, room.id);
-        if (result.success) {
-          newlyUnlocked.push(room);
+      if (!room.is_unlocked) {
+        let canUnlock = true;
+        
+        if (room.required_days > 0 && streakDays < room.required_days) {
+          canUnlock = false;
+        }
+        
+        if (room.required_multi_segment_days > 0 && multiSegmentDays < room.required_multi_segment_days) {
+          canUnlock = false;
+        }
+        
+        if (canUnlock && (room.required_days > 0 || room.required_multi_segment_days > 0)) {
+          const result = roomRepository.unlockRoom(userId, room.id);
+          if (result.success) {
+            newlyUnlocked.push(room);
+          }
         }
       }
     }
@@ -101,7 +172,12 @@ class MoodService {
   }
 
   getMoodByDate(userId, date) {
-    return moodRepository.findByDate(userId, date);
+    const segments = moodRepository.findByDate(userId, date);
+    const aggregate = moodRepository.getDayAggregate(userId, date);
+    return {
+      segments,
+      aggregate
+    };
   }
 
   getMoodsByMonth(userId, year, month) {
@@ -119,20 +195,36 @@ class MoodService {
     }
     
     const records = moodRepository.findByMonth(userId, year, month);
+    const aggregates = moodRepository.getMonthAggregates(userId, year, month);
     const stats = moodRepository.getStats(userId, year, month);
     
     return {
       records,
+      aggregates,
       stats
     };
   }
 
-  deleteMood(userId, date) {
-    const result = moodRepository.delete(userId, date);
+  deleteMood(userId, date, timeSegment = null) {
+    const result = moodRepository.delete(userId, date, timeSegment);
     if (result) {
       userRepository.updateStats(userId);
     }
     return result;
+  }
+
+  getConfig() {
+    return {
+      validSegments: VALID_SEGMENTS,
+      validMoodTypes: VALID_MOOD_TYPES,
+      backfillDays: moodRepository.getBackfillDays(),
+      segmentLabels: {
+        morning: '早晨',
+        afternoon: '下午',
+        evening: '晚间',
+        day: '全天'
+      }
+    };
   }
 }
 
