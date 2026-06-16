@@ -54,6 +54,12 @@ const routes = [
     name: 'EmotionPrescription',
     component: () => import('@/views/EmotionPrescription.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/dream-collection',
+    name: 'DreamCollection',
+    component: () => import('@/views/DreamCollection.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

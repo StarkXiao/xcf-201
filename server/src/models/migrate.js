@@ -629,6 +629,164 @@ const migrate = db.transaction(() => {
   } else {
     console.log('⚠️  情绪处方笺任务已存在，跳过');
   }
+
+  // 梦境收藏馆相关表
+  const fragmentTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='emotion_fragments'").get();
+  if (!fragmentTableExists) {
+    console.log('📝 创建 emotion_fragments 表...');
+    db.exec(`
+      CREATE TABLE emotion_fragments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        source_type VARCHAR(20) NOT NULL DEFAULT 'mood',
+        source_id INTEGER,
+        emotion_type VARCHAR(20) NOT NULL,
+        title VARCHAR(200) NOT NULL,
+        content TEXT NOT NULL,
+        mood_color VARCHAR(20),
+        tags VARCHAR(500),
+        is_starred BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_emotion_fragments_user_id ON emotion_fragments(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_emotion_fragments_source ON emotion_fragments(user_id, source_type)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_emotion_fragments_emotion ON emotion_fragments(user_id, emotion_type)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_emotion_fragments_starred ON emotion_fragments(user_id, is_starred)');
+    console.log('✅ emotion_fragments 表创建完成');
+  } else {
+    console.log('⚠️  emotion_fragments 表已存在，跳过');
+  }
+
+  const storyCardsTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='story_cards'").get();
+  if (!storyCardsTableExists) {
+    console.log('📝 创建 story_cards 表...');
+    db.exec(`
+      CREATE TABLE story_cards (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        room_id INTEGER NOT NULL,
+        story_id INTEGER NOT NULL,
+        card_type VARCHAR(20) NOT NULL DEFAULT 'chapter',
+        title VARCHAR(200) NOT NULL,
+        excerpt TEXT,
+        room_name VARCHAR(100),
+        branch_label VARCHAR(100),
+        mood_theme VARCHAR(20),
+        is_unlocked BOOLEAN DEFAULT 1,
+        unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (room_id) REFERENCES rooms(id),
+        FOREIGN KEY (story_id) REFERENCES stories(id),
+        UNIQUE(user_id, story_id)
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_story_cards_user_id ON story_cards(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_story_cards_room ON story_cards(user_id, room_id)');
+    console.log('✅ story_cards 表创建完成');
+  } else {
+    console.log('⚠️  story_cards 表已存在，跳过');
+  }
+
+  const highlightsTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='collection_highlights'").get();
+  if (!highlightsTableExists) {
+    console.log('📝 创建 collection_highlights 表...');
+    db.exec(`
+      CREATE TABLE collection_highlights (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        source_type VARCHAR(20) NOT NULL DEFAULT 'story',
+        source_id INTEGER,
+        room_id INTEGER,
+        title VARCHAR(200) NOT NULL,
+        content TEXT NOT NULL,
+        highlight_note TEXT,
+        mood_tag VARCHAR(20),
+        is_favorite BOOLEAN DEFAULT 0,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_collection_highlights_user_id ON collection_highlights(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_collection_highlights_source ON collection_highlights(user_id, source_type)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_collection_highlights_favorite ON collection_highlights(user_id, is_favorite)');
+    console.log('✅ collection_highlights 表创建完成');
+  } else {
+    console.log('⚠️  collection_highlights 表已存在，跳过');
+  }
+
+  const goalsTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='collection_goals'").get();
+  if (!goalsTableExists) {
+    console.log('📝 创建 collection_goals 表...');
+    db.exec(`
+      CREATE TABLE collection_goals (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        goal_type VARCHAR(30) NOT NULL,
+        title VARCHAR(200) NOT NULL,
+        description TEXT,
+        target_value INTEGER NOT NULL DEFAULT 1,
+        current_progress INTEGER DEFAULT 0,
+        is_completed BOOLEAN DEFAULT 0,
+        completed_at DATETIME,
+        related_achievement_id INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (related_achievement_id) REFERENCES achievements(id)
+      )
+    `);
+    db.exec('CREATE INDEX IF NOT EXISTS idx_collection_goals_user_id ON collection_goals(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_collection_goals_type ON collection_goals(user_id, goal_type)');
+    console.log('✅ collection_goals 表创建完成');
+  } else {
+    console.log('⚠️  collection_goals 表已存在，跳过');
+  }
+
+  // 梦境收藏馆相关成就
+  const collectionAchievementCount = db.prepare("SELECT COUNT(*) as count FROM achievements WHERE condition_type IN ('collection_fragments', 'collection_story_cards', 'collection_highlights', 'collection_goal_completed')").get().count;
+  if (collectionAchievementCount === 0) {
+    console.log('📝 添加梦境收藏馆成就...');
+    const insertAchievement = db.prepare(`
+      INSERT INTO achievements (name, description, icon, condition_type, condition_value)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    insertAchievement.run('情感拾贝者', '在梦境收藏馆中收藏 5 个情绪片段', '💧', 'collection_fragments', 5);
+    insertAchievement.run('情感深海', '在梦境收藏馆中收藏 20 个情绪片段', '🌊', 'collection_fragments', 20);
+    insertAchievement.run('故事考古者', '在梦境收藏馆中解锁 10 张故事卡', '📜', 'collection_story_cards', 10);
+    insertAchievement.run('故事收藏家', '在梦境收藏馆中解锁 25 张故事卡', '📚', 'collection_story_cards', 25);
+    insertAchievement.run('高光猎手', '在梦境收藏馆中收藏 5 个高光内容', '🌟', 'collection_highlights', 5);
+    insertAchievement.run('光芒收藏家', '在梦境收藏馆中收藏 20 个高光内容', '✨', 'collection_highlights', 20);
+    insertAchievement.run('收藏目标达成', '完成 2 个收藏目标', '🎯', 'collection_goal_completed', 2);
+    insertAchievement.run('梦境收藏大师', '完成所有收藏目标', '🏛️', 'collection_goal_completed', 4);
+    console.log('✅ 梦境收藏馆成就添加完成');
+  } else {
+    console.log('⚠️  梦境收藏馆成就已存在，跳过');
+  }
+
+  // 梦境收藏馆相关任务
+  const collectionTaskCount = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE id IN (35, 36, 37, 38, 39, 40)").get().count;
+  if (collectionTaskCount < 6) {
+    console.log('📝 添加梦境收藏馆任务...');
+    const insertDailyTask = db.prepare(`
+      INSERT OR IGNORE INTO tasks (id, title, description, type, target, reward, icon, reset_type, reset_days)
+      VALUES (?, ?, ?, 'daily', ?, ?, ?, 'daily', 1)
+    `);
+    insertDailyTask.run(35, '收藏情绪', '收藏一个情绪片段到梦境收藏馆', 1, 15, 'droplets');
+    insertDailyTask.run(36, '高光时刻', '收藏一个高光内容到梦境收藏馆', 1, 15, 'star');
+
+    const insertOnceTask = db.prepare(`
+      INSERT OR IGNORE INTO tasks (id, title, description, type, target, reward, icon)
+      VALUES (?, ?, ?, 'once', ?, ?, ?)
+    `);
+    insertOnceTask.run(37, '初次收藏', '第一次收藏情绪片段', 1, 25, 'heart');
+    insertOnceTask.run(38, '故事收藏者', '解锁 5 张故事卡', 5, 60, 'scroll');
+    insertOnceTask.run(39, '高光猎手', '收藏 10 个高光内容', 10, 80, 'sparkles');
+    insertOnceTask.run(40, '收藏大师', '完成所有收藏目标', 4, 200, 'crown');
+    console.log('✅ 梦境收藏馆任务添加完成');
+  } else {
+    console.log('⚠️  梦境收藏馆任务已存在，跳过');
+  }
 });
 
 try {

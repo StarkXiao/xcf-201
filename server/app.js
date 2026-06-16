@@ -44,7 +44,8 @@ router.get('/', async (ctx) => {
       tasks: '/api/tasks/*',
       achievements: '/api/achievements/*',
       profile: '/api/profile/*',
-      prescriptions: '/api/prescriptions/*'
+      prescriptions: '/api/prescriptions/*',
+      dreamCollection: '/api/dream-collection/*'
     }
   };
 });
@@ -62,6 +63,7 @@ const roomRoutes = require('./src/routes/rooms');
 const achievementRoutes = require('./src/routes/achievements');
 const retrospectiveRoutes = require('./src/routes/retrospectives');
 const prescriptionRoutes = require('./src/routes/emotionPrescriptions');
+const dreamCollectionRoutes = require('./src/routes/dreamCollections');
 
 const publicRouter = new Router();
 publicRouter.get('/api/auth/login', async (ctx) => {
@@ -97,6 +99,8 @@ app.use(retrospectiveRoutes.routes());
 app.use(retrospectiveRoutes.allowedMethods());
 app.use(prescriptionRoutes.routes());
 app.use(prescriptionRoutes.allowedMethods());
+app.use(dreamCollectionRoutes.routes());
+app.use(dreamCollectionRoutes.allowedMethods());
 
 app.listen(PORT, () => {
   console.log(`

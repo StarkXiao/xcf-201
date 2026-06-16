@@ -231,5 +231,86 @@ CREATE INDEX IF NOT EXISTS idx_user_tasks_task_date ON user_tasks(task_date);
 CREATE INDEX IF NOT EXISTS idx_user_achievements_user_id ON user_achievements(user_id);
 CREATE INDEX IF NOT EXISTS idx_emotion_prescriptions_user_id ON emotion_prescriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_emotion_prescriptions_period ON emotion_prescriptions(user_id, period_type);
+-- 梦境收藏馆 - 情绪片段表
+CREATE TABLE IF NOT EXISTS emotion_fragments (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  source_type VARCHAR(20) NOT NULL DEFAULT 'mood',
+  source_id INTEGER,
+  emotion_type VARCHAR(20) NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  content TEXT NOT NULL,
+  mood_color VARCHAR(20),
+  tags VARCHAR(500),
+  is_starred BOOLEAN DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 梦境收藏馆 - 房间故事卡表
+CREATE TABLE IF NOT EXISTS story_cards (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  room_id INTEGER NOT NULL,
+  story_id INTEGER NOT NULL,
+  card_type VARCHAR(20) NOT NULL DEFAULT 'chapter',
+  title VARCHAR(200) NOT NULL,
+  excerpt TEXT,
+  room_name VARCHAR(100),
+  branch_label VARCHAR(100),
+  mood_theme VARCHAR(20),
+  is_unlocked BOOLEAN DEFAULT 1,
+  unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (room_id) REFERENCES rooms(id),
+  FOREIGN KEY (story_id) REFERENCES stories(id),
+  UNIQUE(user_id, story_id)
+);
+
+-- 梦境收藏馆 - 高光收藏表
+CREATE TABLE IF NOT EXISTS collection_highlights (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  source_type VARCHAR(20) NOT NULL DEFAULT 'story',
+  source_id INTEGER,
+  room_id INTEGER,
+  title VARCHAR(200) NOT NULL,
+  content TEXT NOT NULL,
+  highlight_note TEXT,
+  mood_tag VARCHAR(20),
+  is_favorite BOOLEAN DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 梦境收藏馆 - 收藏目标表
+CREATE TABLE IF NOT EXISTS collection_goals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  goal_type VARCHAR(30) NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  target_value INTEGER NOT NULL DEFAULT 1,
+  current_progress INTEGER DEFAULT 0,
+  is_completed BOOLEAN DEFAULT 0,
+  completed_at DATETIME,
+  related_achievement_id INTEGER,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (related_achievement_id) REFERENCES achievements(id)
+);
+
+-- 创建梦境收藏馆相关索引
+CREATE INDEX IF NOT EXISTS idx_emotion_fragments_user_id ON emotion_fragments(user_id);
+CREATE INDEX IF NOT EXISTS idx_emotion_fragments_source ON emotion_fragments(user_id, source_type);
+CREATE INDEX IF NOT EXISTS idx_emotion_fragments_emotion ON emotion_fragments(user_id, emotion_type);
+CREATE INDEX IF NOT EXISTS idx_emotion_fragments_starred ON emotion_fragments(user_id, is_starred);
+CREATE INDEX IF NOT EXISTS idx_story_cards_user_id ON story_cards(user_id);
+CREATE INDEX IF NOT EXISTS idx_story_cards_room ON story_cards(user_id, room_id);
+CREATE INDEX IF NOT EXISTS idx_collection_highlights_user_id ON collection_highlights(user_id);
+CREATE INDEX IF NOT EXISTS idx_collection_highlights_source ON collection_highlights(user_id, source_type);
+CREATE INDEX IF NOT EXISTS idx_collection_highlights_favorite ON collection_highlights(user_id, is_favorite);
+CREATE INDEX IF NOT EXISTS idx_collection_goals_user_id ON collection_goals(user_id);
+CREATE INDEX IF NOT EXISTS idx_collection_goals_type ON collection_goals(user_id, goal_type);
 CREATE INDEX IF NOT EXISTS idx_emotion_stage_archives_user_id ON emotion_stage_archives(user_id);
 CREATE INDEX IF NOT EXISTS idx_emotion_stage_archives_period ON emotion_stage_archives(user_id, archive_type);

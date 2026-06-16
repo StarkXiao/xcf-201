@@ -287,7 +287,13 @@ class AchievementService {
       31: 'prescription_view',
       32: 'prescription_view',
       33: 'prescription_view',
-      34: 'prescription_view'
+      34: 'prescription_view',
+      35: 'collection_fragment',
+      36: 'collection_highlight',
+      37: 'collection_fragment',
+      38: 'collection_story_card',
+      39: 'collection_highlight',
+      40: 'collection_goal'
     };
     
     const taskAction = taskActionMap[task.id] || 'mood_record';
@@ -453,7 +459,11 @@ class AchievementService {
       'specific_mood_records': `指定情绪记录 ${conditionValue} 次`,
       'consecutive_task_claims': `连续 ${conditionValue} 天领取任务奖励`,
       'combo_achievement': '完成所有组合条件',
-      'retrospective_count': `累计完成 ${conditionValue} 次心情回顾`
+      'retrospective_count': `累计完成 ${conditionValue} 次心情回顾`,
+      'collection_fragments': `收藏 ${conditionValue} 个情绪片段`,
+      'collection_story_cards': `解锁 ${conditionValue} 张故事卡`,
+      'collection_highlights': `收藏 ${conditionValue} 个高光内容`,
+      'collection_goal_completed': `完成 ${conditionValue} 个收藏目标`
     };
     
     return conditionMap[conditionType] || `${conditionType} ${conditionValue}`;

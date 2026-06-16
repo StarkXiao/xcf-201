@@ -98,4 +98,26 @@ export const prescriptionApi = {
   generateMonthlyArchive: (year, month) => api.post('/prescriptions/archives/generate/monthly', { year, month })
 }
 
+export const dreamCollectionApi = {
+  getOverview: () => api.get('/dream-collection/overview'),
+  getFragments: (params = {}) => api.get('/dream-collection/fragments', { params }),
+  createFragment: (data) => api.post('/dream-collection/fragments', data),
+  updateFragment: (id, data) => api.put(`/dream-collection/fragments/${id}`, data),
+  deleteFragment: (id) => api.delete(`/dream-collection/fragments/${id}`),
+  starFragment: (id, isStarred) => api.post(`/dream-collection/fragments/${id}/star`, { isStarred }),
+  getFragmentStats: () => api.get('/dream-collection/fragments/stats'),
+  getStoryCards: (params = {}) => api.get('/dream-collection/story-cards', { params }),
+  unlockStoryCard: (data) => api.post('/dream-collection/story-cards/unlock', data),
+  deleteStoryCard: (id) => api.delete(`/dream-collection/story-cards/${id}`),
+  getHighlights: (params = {}) => api.get('/dream-collection/highlights', { params }),
+  createHighlight: (data) => api.post('/dream-collection/highlights', data),
+  updateHighlight: (id, data) => api.put(`/dream-collection/highlights/${id}`, data),
+  deleteHighlight: (id) => api.delete(`/dream-collection/highlights/${id}`),
+  favoriteHighlight: (id, isFavorite) => api.post(`/dream-collection/highlights/${id}/favorite`, { isFavorite }),
+  getGoals: (params = {}) => api.get('/dream-collection/goals', { params }),
+  createGoal: (data) => api.post('/dream-collection/goals', data),
+  initGoals: () => api.post('/dream-collection/goals/init'),
+  deleteGoal: (id) => api.delete(`/dream-collection/goals/${id}`)
+}
+
 export default api
