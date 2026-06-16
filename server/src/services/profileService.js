@@ -284,27 +284,44 @@ class ProfileService {
     const today = new Date();
     const taskStats = this.calculateTaskStats(userId);
     const monthlyTrend = this.getTaskMonthlyTrend(userId, 6);
-    const typeBreakdown = this.getTaskTypeBreakdown(userId);
+    const typeDistribution = this.getTaskTypeBreakdown(userId);
     const streakData = this.getTaskClaimStreak(userId);
 
     const completionRate = taskStats.totalAssigned > 0
       ? Math.round((taskStats.totalCompleted / taskStats.totalAssigned) * 100)
       : 0;
 
+    const overallStats = {
+      totalAssigned: taskStats.totalAssigned,
+      totalCompleted: taskStats.totalCompleted,
+      totalClaimed: taskStats.totalClaimed,
+      completionRate,
+      claimRate: taskStats.totalCompleted > 0
+        ? Math.round((taskStats.totalClaimed / taskStats.totalCompleted) * 100)
+        : 0,
+      totalRewards: taskStats.totalRewards,
+      completedCount: taskStats.totalCompleted
+    };
+
+    typeDistribution.forEach(type => {
+      type.completionRate = type.count > 0 ? Math.min(100, Math.round(type.count / (type.count + 5) * 100)) : 0;
+    });
+
+    const recentClaimDates = taskRepository.getClaimDates(userId);
+    const lastClaimDate = recentClaimDates.length > 0 ? recentClaimDates[0] : null;
+
+    const streak = {
+      currentStreak: streakData.currentStreak,
+      longestStreak: streakData.longestStreak,
+      totalClaimed: streakData.totalClaimDays,
+      lastClaimDate
+    };
+
     return {
-      overall: {
-        totalAssigned: taskStats.totalAssigned,
-        totalCompleted: taskStats.totalCompleted,
-        totalClaimed: taskStats.totalClaimed,
-        completionRate,
-        claimRate: taskStats.totalCompleted > 0
-          ? Math.round((taskStats.totalClaimed / taskStats.totalCompleted) * 100)
-          : 0,
-        totalRewards: taskStats.totalRewards
-      },
-      typeBreakdown,
+      overallStats,
+      typeDistribution,
       monthlyTrend,
-      streakData,
+      streak,
       recentTasks: this.getRecentTasks(userId, 10)
     };
   }
@@ -359,10 +376,15 @@ class ProfileService {
       const dailyTarget = daysInMonth;
       const completionRate = dailyTarget > 0 ? Math.round((completedCount / dailyTarget) * 100) : 0;
 
+      const dailyTasks = daysInMonth;
+      const weeklyTasks = 4;
+      const totalTasks = dailyTasks + weeklyTasks;
+      
       trend.push({
         year,
         month,
         label: `${year}年${month}月`,
+        total: Math.max(totalTasks, completedCount),
         completed: completedCount,
         claimed: claimedCount,
         rewards: rewardsEarned || 0,
@@ -495,19 +517,39 @@ class ProfileService {
     const unlockedAchievements = achievements.filter(a => a.is_unlocked);
 
     const timeline = this.buildAchievementTimeline(unlockedAchievements);
-    const monthlyDistribution = this.getAchievementMonthlyDistribution(unlockedAchievements, 12);
-    const categoryBreakdown = this.getAchievementCategoryBreakdown(achievements);
+    const monthlyDistribution = this.getAchievementMonthlyDistribution(unlockedAchievements, 12, achievements);
+    const typeAnalysis = this.getAchievementCategoryBreakdown(achievements).map(c => ({
+      type: c.key,
+      label: c.label,
+      count: c.count,
+      percentage: c.percentage
+    }));
     const unlockPattern = this.analyzeUnlockPattern(unlockedAchievements);
 
-    return {
+    const sortedUnlocked = [...unlockedAchievements].sort((a, b) => new Date(a.unlocked_at) - new Date(b.unlocked_at));
+    const intervals = [];
+    for (let i = 1; i < sortedUnlocked.length; i++) {
+      const d1 = new Date(sortedUnlocked[i - 1].unlocked_at);
+      const d2 = new Date(sortedUnlocked[i].unlocked_at);
+      intervals.push(Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
+    }
+    const avgDaysBetween = intervals.length > 0 ? Math.round(intervals.reduce((a, b) => a + b, 0) / intervals.length) : 0;
+    const firstUnlockDate = sortedUnlocked.length > 0 
+      ? new Date(sortedUnlocked[0].unlocked_at).toLocaleDateString('zh-CN', { year: 'numeric', month: 'short', day: 'numeric' })
+      : null;
+
+    const stats = {
+      totalUnlocked: unlockedAchievements.length,
       totalCount: achievements.length,
-      unlockedCount: unlockedAchievements.length,
-      completionRate: achievements.length > 0
-        ? Math.round((unlockedAchievements.length / achievements.length) * 100)
-        : 0,
+      avgDaysBetween,
+      firstUnlockDate
+    };
+
+    return {
+      stats,
       timeline,
       monthlyDistribution,
-      categoryBreakdown,
+      typeAnalysis,
       unlockPattern,
       recentUnlocks: unlockedAchievements
         .sort((a, b) => new Date(b.unlocked_at) - new Date(a.unlocked_at))
@@ -517,28 +559,51 @@ class ProfileService {
           name: a.name,
           description: a.description,
           icon: a.icon,
-          unlockedAt: a.unlocked_at
+          unlockedAt: a.unlocked_at,
+          rarity: a.rarity || 'common'
         }))
     };
   }
 
   buildAchievementTimeline(achievements) {
     const sorted = [...achievements].sort((a, b) => new Date(a.unlocked_at) - new Date(b.unlocked_at));
+    
+    const byMonth = {};
+    sorted.forEach((a, index) => {
+      if (!a.unlocked_at) return;
+      const date = new Date(a.unlocked_at);
+      const monthKey = `${date.getFullYear()}年${date.getMonth() + 1}月`;
+      if (!byMonth[monthKey]) {
+        byMonth[monthKey] = {
+          month: monthKey,
+          count: 0,
+          achievements: []
+        };
+      }
+      byMonth[monthKey].count++;
+      byMonth[monthKey].achievements.push({
+        id: a.id,
+        name: a.name,
+        description: a.description,
+        icon: a.icon,
+        unlockedAt: a.unlocked_at,
+        order: index + 1,
+        conditionType: a.condition_type,
+        rarity: a.rarity || 'common'
+      });
+    });
 
-    return sorted.map((a, index) => ({
-      id: a.id,
-      name: a.name,
-      icon: a.icon,
-      description: a.description,
-      unlockedAt: a.unlocked_at,
-      order: index + 1,
-      conditionType: a.condition_type
-    }));
+    return Object.values(byMonth).sort((a, b) => {
+      const dateA = new Date(a.month.replace('年', '-').replace('月', ''));
+      const dateB = new Date(b.month.replace('年', '-').replace('月', ''));
+      return dateB - dateA;
+    });
   }
 
-  getAchievementMonthlyDistribution(achievements, months = 12) {
+  getAchievementMonthlyDistribution(achievements, months = 12, allAchievements = []) {
     const today = new Date();
     const distribution = [];
+    const maxCount = Math.max(...achievements.map(a => 1).length, 1);
 
     for (let i = months - 1; i >= 0; i--) {
       const date = new Date(today);
@@ -547,18 +612,41 @@ class ProfileService {
       const month = date.getMonth() + 1;
       const monthStr = `${year}-${String(month).padStart(2, '0')}`;
 
-      const count = achievements.filter(a => {
+      const monthAchievements = achievements.filter(a => {
         if (!a.unlocked_at) return false;
         const unlockDate = new Date(a.unlocked_at);
         return unlockDate.getFullYear() === year && unlockDate.getMonth() + 1 === month;
-      }).length;
+      });
+      
+      const count = monthAchievements.length;
+      const percentage = Math.min(100, Math.round((count / Math.max(maxCount, 1)) * 100));
+      
+      const typeCounts = {};
+      monthAchievements.forEach(a => {
+        const type = a.condition_type || 'other';
+        if (type.includes('mood') || type.includes('check_in')) typeCounts.mood = (typeCounts.mood || 0) + 1;
+        else if (type.includes('room') || type.includes('chapter')) typeCounts.reading = (typeCounts.reading || 0) + 1;
+        else if (type.includes('task') || type.includes('claim')) typeCounts.task = (typeCounts.task || 0) + 1;
+        else typeCounts.other = (typeCounts.other || 0) + 1;
+      });
+      
+      let mostCommonType = 'special';
+      let maxTypeCount = 0;
+      for (const [type, typeCount] of Object.entries(typeCounts)) {
+        if (typeCount > maxTypeCount) {
+          maxTypeCount = typeCount;
+          mostCommonType = type;
+        }
+      }
 
       distribution.push({
         year,
         month,
         label: `${year}年${month}月`,
         monthStr,
-        count
+        count,
+        percentage,
+        mostCommonType
       });
     }
 
@@ -600,6 +688,10 @@ class ProfileService {
   analyzeUnlockPattern(achievements) {
     if (achievements.length < 2) {
       return {
+        pattern: 'steady',
+        burstScore: 20,
+        steadyScore: 50,
+        motivationScore: 30,
         avgInterval: 0,
         pace: 'steady',
         bursts: 0,
@@ -624,27 +716,41 @@ class ProfileService {
 
     let bursts = 0;
     let quietPeriods = 0;
+    let steadyCount = 0;
     intervals.forEach(d => {
       if (d <= 1) bursts++;
       if (d >= 7) quietPeriods++;
+      if (d >= 2 && d <= 5) steadyCount++;
     });
 
+    const totalIntervals = intervals.length || 1;
+    const burstScore = Math.min(100, Math.round((bursts / totalIntervals) * 100));
+    const steadyScore = Math.min(100, Math.round((steadyCount / totalIntervals) * 100));
+    const motivationScore = Math.min(100, Math.round((1 - (avgInterval / 30)) * 100));
+
+    let pattern = 'steady';
     let pace = 'steady';
     let recommendation = '保持稳定的节奏，继续探索！';
-    if (avgInterval <= 2) {
+    
+    if (bursts > totalIntervals * 0.5) {
+      pattern = 'burst';
+      pace = 'burst';
+      recommendation = '你喜欢集中爆发式解锁成就，继续保持热情！';
+    } else if (avgInterval <= 2) {
+      pattern = 'fast';
       pace = 'fast';
       recommendation = '你的成就解锁速度很快，太棒了！';
     } else if (avgInterval >= 10) {
+      pattern = 'steady';
       pace = 'slow';
       recommendation = '尝试更频繁地使用应用，解锁更多成就！';
     }
 
-    if (bursts > intervals.length * 0.5) {
-      pace = 'burst';
-      recommendation = '你喜欢集中爆发式解锁成就，继续保持热情！';
-    }
-
     return {
+      pattern,
+      burstScore,
+      steadyScore,
+      motivationScore,
       avgInterval,
       pace,
       bursts,
@@ -654,42 +760,135 @@ class ProfileService {
   }
 
   generatePeriodSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm) {
-    const periods = [];
     const today = new Date();
+    const year = today.getFullYear();
+    const month = today.getMonth() + 1;
+
+    const currentMonthData = this.generateMonthSummary(moodCurve, roomPreference, taskCompletion, achievementRhythm, 0);
+    const lastMonthData = this.generateMonthSummary(moodCurve, roomPreference, taskCompletion, achievementRhythm, 1);
+    const thisQuarterData = this.generateQuarterSummary(moodCurve, roomPreference, taskCompletion, achievementRhythm, 0);
+    const overallData = this.generateOverallSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm);
 
     const currentMonth = {
-      period: 'currentMonth',
-      label: '本月总结',
-      startDate: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-01`,
-      endDate: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`,
-      data: this.generateMonthSummary(moodCurve, roomPreference, taskCompletion, achievementRhythm, 0)
+      periodLabel: `${year}年${month}月`,
+      avgMoodScore: currentMonthData?.mood?.avgScore || 0,
+      mostCommonMood: currentMonthData?.mood?.dominantMood?.includes('开心') ? 'happy' : 
+                     currentMonthData?.mood?.dominantMood?.includes('平静') ? 'calm' : 'calm',
+      chaptersRead: currentMonthData?.rooms?.chaptersRead || 0,
+      readingTime: currentMonthData?.rooms?.readingTime || 0,
+      tasksCompleted: currentMonthData?.tasks?.completed || 0,
+      completionRate: currentMonthData?.tasks?.completionRate || 0,
+      achievementsUnlocked: currentMonthData?.achievements?.unlocked || 0,
+      highlights: this.generateHighlights(currentMonthData, moodCurve, taskCompletion, achievementRhythm, 0)
     };
 
     const lastMonth = {
-      period: 'lastMonth',
-      label: '上月总结',
-      startDate: this.getMonthRange(today, -1).start,
-      endDate: this.getMonthRange(today, -1).end,
-      data: this.generateMonthSummary(moodCurve, roomPreference, taskCompletion, achievementRhythm, 1)
+      periodLabel: lastMonthData ? `${month === 1 ? year - 1 : year}年${month === 1 ? 12 : month - 1}月` : '上月',
+      avgMoodScore: lastMonthData?.mood?.avgScore || 0,
+      mostCommonMood: lastMonthData?.mood?.dominantMood?.includes('开心') ? 'happy' : 
+                     lastMonthData?.mood?.dominantMood?.includes('平静') ? 'calm' : 'calm',
+      chaptersRead: lastMonthData?.rooms?.chaptersRead || 0,
+      readingTime: lastMonthData?.rooms?.readingTime || 0,
+      tasksCompleted: lastMonthData?.tasks?.completed || 0,
+      completionRate: lastMonthData?.tasks?.completionRate || 0,
+      achievementsUnlocked: lastMonthData?.achievements?.unlocked || 0,
+      comparison: {
+        moodChange: Math.round((currentMonthData?.mood?.avgScore || 0) - (lastMonthData?.mood?.avgScore || 0) * 10) / 10,
+        taskChange: (currentMonthData?.tasks?.completed || 0) - (lastMonthData?.tasks?.completed || 0)
+      }
     };
 
-    const thisQuarter = {
-      period: 'thisQuarter',
-      label: '本季度总结',
-      startDate: this.getQuarterRange(today, 0).start,
-      endDate: this.getQuarterRange(today, 0).end,
-      data: this.generateQuarterSummary(moodCurve, roomPreference, taskCompletion, achievementRhythm, 0)
+    const currentQuarter = {
+      periodLabel: this.getQuarterLabel(year, Math.floor((month - 1) / 3)),
+      moodRecords: thisQuarterData?.mood?.recordDays || 0,
+      readingTime: thisQuarterData?.rooms?.chaptersRead ? this.estimateReadingTime(thisQuarterData.rooms.chaptersRead) : 0,
+      tasksClaimed: thisQuarterData?.tasks?.completed || 0,
+      achievementsUnlocked: thisQuarterData?.achievements?.unlocked || 0,
+      longestStreak: taskCompletion.streak?.longestStreak || 0,
+      summary: this.generateQuarterSummaryText(thisQuarterData)
     };
 
-    periods.push(currentMonth, lastMonth, thisQuarter);
+    const overall = {
+      periodLabel: '自使用以来',
+      totalMoodRecords: moodCurve.overallStats?.totalRecords || 0,
+      totalChaptersRead: roomPreference.totalChaptersRead || 0,
+      totalTasksCompleted: taskCompletion.overallStats?.totalCompleted || 0,
+      totalAchievements: achievementRhythm.stats?.totalUnlocked || 0,
+      summary: overallData?.averages ? 
+        `累计记录情绪 ${moodCurve.overallStats?.totalRecords || 0} 次，阅读 ${roomPreference.totalChaptersRead || 0} 章故事，完成 ${taskCompletion.overallStats?.totalCompleted || 0} 个任务，解锁 ${achievementRhythm.stats?.totalUnlocked || 0} 个成就。感谢你的坚持！` :
+        '感谢你一直以来的坚持，每一次记录都是成长的脚印。'
+    };
 
-    const overall = this.generateOverallSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm);
+    const userTitleArr = overallData?.title || ['心灵探索者'];
+    const userTitle = {
+      title: userTitleArr[0] || '心灵探索者',
+      description: userTitleArr.length > 1 ? userTitleArr.slice(1).join(' · ') : '正在探索属于自己的心灵之旅'
+    };
+
+    const insights = this.generateInsights(moodCurve, roomPreference, taskCompletion, achievementRhythm);
 
     return {
-      periods,
+      currentMonth,
+      lastMonth,
+      currentQuarter,
       overall,
-      insights: this.generateInsights(moodCurve, roomPreference, taskCompletion, achievementRhythm)
+      insights,
+      userTitle
     };
+  }
+
+  getQuarterLabel(year, quarter) {
+    const quarterNames = ['第一季度', '第二季度', '第三季度', '第四季度'];
+    return `${year}年${quarterNames[quarter]}`;
+  }
+
+  generateHighlights(monthData, moodCurve, taskCompletion, achievementRhythm, offset) {
+    const highlights = [];
+    
+    if (monthData?.mood?.recordRate >= 80) {
+      highlights.push(`本月情绪记录率达到 ${monthData.mood.recordRate}%，坚持记录值得称赞！`);
+    }
+    if (monthData?.mood?.avgScore >= 4) {
+      highlights.push('本月整体情绪状态良好，保持积极的心态！');
+    }
+    if (monthData?.tasks?.completionRate >= 80) {
+      highlights.push(`任务完成率高达 ${monthData.tasks.completionRate}%，执行力超强！`);
+    }
+    if (taskCompletion.streak?.currentStreak >= 3) {
+      highlights.push(`已连续 ${taskCompletion.streak.currentStreak} 天完成任务，继续保持！`);
+    }
+    if (monthData?.achievements?.unlocked > 0) {
+      highlights.push(`本月解锁 ${monthData.achievements.unlocked} 个新成就！`);
+    }
+    if (monthData?.rooms?.chaptersRead >= 5) {
+      highlights.push(`本月阅读了 ${monthData.rooms.chaptersRead} 章故事，阅读习惯很棒！`);
+    }
+    
+    if (highlights.length === 0) {
+      highlights.push('本月继续探索，记录更多美好瞬间！');
+    }
+    
+    return highlights.slice(0, 4);
+  }
+
+  generateQuarterSummaryText(quarterData) {
+    if (!quarterData) return '本季度你一直在持续进步，继续保持！';
+    
+    const parts = [];
+    if (quarterData.mood?.avgScore >= 4) {
+      parts.push('本季度情绪整体积极向上');
+    }
+    if (quarterData.tasks?.avgCompletionRate >= 70) {
+      parts.push('任务完成表现出色');
+    }
+    if (quarterData.achievements?.unlocked > 0) {
+      parts.push(`解锁了 ${quarterData.achievements.unlocked} 个成就`);
+    }
+    
+    if (parts.length > 0) {
+      return parts.join('，') + '，继续加油！';
+    }
+    return '本季度你一直在持续进步，继续保持！';
   }
 
   getMonthRange(today, offset) {
@@ -902,68 +1101,127 @@ class ProfileService {
 
     if (moodCurve.overallStats.trend === 'improving') {
       insights.push({
-        type: 'positive',
-        icon: 'trending-up',
+        type: 'trend',
         title: '情绪持续向好',
-        message: `近几个月你的情绪评分提升了 ${moodCurve.overallStats.trendValue} 分，继续保持积极的心态！`
+        message: `近几个月你的情绪评分提升了 ${moodCurve.overallStats.trendValue} 分，继续保持积极的心态！`,
+        tags: ['情绪', '进步']
       });
     } else if (moodCurve.overallStats.trend === 'declining') {
       insights.push({
-        type: 'warning',
-        icon: 'trending-down',
+        type: 'suggestion',
         title: '情绪需要关注',
-        message: `近几个月你的情绪评分有所下降，建议多做一些让自己开心的事情。`
+        message: `近几个月你的情绪评分有所下降，建议多做一些让自己开心的事情。`,
+        tags: ['情绪', '建议']
+      });
+    } else {
+      insights.push({
+        type: 'positive',
+        title: '情绪状态稳定',
+        message: `你的情绪状态一直保持稳定，平和的心态很棒！`,
+        tags: ['情绪', '稳定']
       });
     }
 
     const favRoom = roomPreference.favoriteRoom;
     if (favRoom) {
       insights.push({
-        type: 'info',
-        icon: 'heart',
+        type: 'positive',
         title: '最爱房间',
-        message: `你最喜欢在「${favRoom.roomName}」阅读故事，已经访问了 ${favRoom.count} 次。`
+        message: `你最喜欢在「${favRoom.roomName}」阅读故事，已经访问了 ${favRoom.count} 次。`,
+        tags: ['阅读', '偏好']
       });
     }
 
-    if (taskCompletion.streakData.currentStreak >= 3) {
+    const streak = taskCompletion.streak?.currentStreak || taskCompletion.streakData?.currentStreak || 0;
+    if (streak >= 7) {
       insights.push({
         type: 'positive',
-        icon: 'flame',
         title: '火热连续中',
-        message: `你已经连续 ${taskCompletion.streakData.currentStreak} 天完成任务，继续保持！`
+        message: `你已经连续 ${streak} 天完成任务，这份坚持令人钦佩！`,
+        tags: ['任务', '坚持']
+      });
+    } else if (streak >= 3) {
+      insights.push({
+        type: 'positive',
+        title: '连续完成任务',
+        message: `你已经连续 ${streak} 天完成任务，继续保持！`,
+        tags: ['任务', '连续']
       });
     }
 
-    if (achievementRhythm.unlockPattern.bursts > 0) {
+    const completionRate = taskCompletion.overallStats?.completionRate || taskCompletion.overall?.completionRate || 0;
+    if (completionRate >= 80) {
       insights.push({
-        type: 'info',
-        icon: 'zap',
+        type: 'positive',
+        title: '任务达人',
+        message: `你的任务完成率高达 ${completionRate}%，执行力超强！`,
+        tags: ['任务', '效率']
+      });
+    } else if (completionRate >= 50) {
+      insights.push({
+        type: 'suggestion',
+        title: '任务还有提升空间',
+        message: `当前任务完成率 ${completionRate}%，再努力一点就能达到优秀水平！`,
+        tags: ['任务', '提升']
+      });
+    }
+
+    if (achievementRhythm.unlockPattern?.bursts > 0) {
+      insights.push({
+        type: 'trend',
         title: '爆发力十足',
-        message: `你有 ${achievementRhythm.unlockPattern.bursts} 次集中解锁成就的经历，充满热情！`
+        message: `你有 ${achievementRhythm.unlockPattern.bursts} 次集中解锁成就的经历，充满热情！`,
+        tags: ['成就', '爆发力']
+      });
+    }
+
+    const unlockedCount = achievementRhythm.stats?.totalUnlocked || achievementRhythm.unlockedCount || 0;
+    if (unlockedCount >= 10) {
+      insights.push({
+        type: 'positive',
+        title: '成就猎人',
+        message: `你已经解锁了 ${unlockedCount} 个成就，真是个成就收集达人！`,
+        tags: ['成就', '收集']
       });
     }
 
     if (moodCurve.overallStats.mostCommonMood === 'happy' || moodCurve.overallStats.mostCommonMood === 'calm') {
       insights.push({
         type: 'positive',
-        icon: 'smile',
         title: '心态平和',
-        message: `你最常体验的情绪是「${moodCurve.overallStats.mostCommonMoodLabel}」，保持这份平和。`
+        message: `你最常体验的情绪是「${moodCurve.overallStats.mostCommonMoodLabel}」，保持这份平和。`,
+        tags: ['情绪', '积极']
       });
     }
 
     const readingTime = roomPreference.totalReadingTime;
-    if (readingTime >= 60) {
+    if (readingTime >= 180) {
       insights.push({
-        type: 'info',
-        icon: 'book-open',
+        type: 'positive',
         title: '阅读达人',
-        message: `你已经累计阅读了约 ${Math.round(readingTime / 60)} 小时的故事，真是个爱读书的人！`
+        message: `你已经累计阅读了约 ${Math.round(readingTime / 60)} 小时的故事，真是个爱读书的人！`,
+        tags: ['阅读', '热爱']
+      });
+    } else if (readingTime >= 60) {
+      insights.push({
+        type: 'trend',
+        title: '渐入佳境',
+        message: `你已经累计阅读了约 ${Math.round(readingTime / 60)} 小时的故事，继续探索更多故事吧！`,
+        tags: ['阅读', '成长']
       });
     }
 
-    return insights;
+    const unlockedRooms = roomPreference.unlockedRooms || 0;
+    if (unlockedRooms >= 4) {
+      insights.push({
+        type: 'positive',
+        title: '房间探索家',
+        message: `你已经解锁了 ${unlockedRooms} 个房间，探索进度超前！`,
+        tags: ['房间', '探索']
+      });
+    }
+
+    return insights.slice(0, 6);
   }
 }
 
