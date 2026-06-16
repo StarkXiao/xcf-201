@@ -786,17 +786,22 @@ class ProfileService {
     const overallData = this.generateOverallSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm);
 
     const currentMonthRetro = retrospectiveRepository.getStats(userId, year, month);
+    const currentMonthRetroList = retrospectiveRepository.findByMonth(userId, year, month);
     const lastMonthYear = month === 1 ? year - 1 : year;
     const lastMonthMonth = month === 1 ? 12 : month - 1;
     const lastMonthRetro = retrospectiveRepository.getStats(userId, lastMonthYear, lastMonthMonth);
+    const lastMonthRetroList = retrospectiveRepository.findByMonth(userId, lastMonthYear, lastMonthMonth);
     
     const quarter = Math.floor((month - 1) / 3);
     const quarterStartMonth = quarter * 3 + 1;
     const quarterEndMonth = quarter * 3 + 3;
     let quarterRetroCount = 0;
+    const quarterRetroList = [];
     for (let m = quarterStartMonth; m <= quarterEndMonth; m++) {
       const stats = retrospectiveRepository.getStats(userId, year, m);
       quarterRetroCount += stats?.totalCount || 0;
+      const monthRetros = retrospectiveRepository.findByMonth(userId, year, m);
+      quarterRetroList.push(...monthRetros);
     }
     
     const overallRetroStats = retrospectiveRepository.getStats(userId);
@@ -813,6 +818,7 @@ class ProfileService {
       achievementsUnlocked: currentMonthData?.achievements?.unlocked || 0,
       retrospectives: currentMonthRetro?.totalCount || 0,
       retroTypes: currentMonthRetro?.typeDistribution || {},
+      featuredRetros: this.pickFeaturedRetros(currentMonthRetroList, 3),
       highlights: this.generateHighlights(currentMonthData, moodCurve, taskCompletion, achievementRhythm, 0, currentMonthRetro)
     };
 
@@ -827,6 +833,7 @@ class ProfileService {
       completionRate: lastMonthData?.tasks?.completionRate || 0,
       achievementsUnlocked: lastMonthData?.achievements?.unlocked || 0,
       retrospectives: lastMonthRetro?.totalCount || 0,
+      featuredRetros: this.pickFeaturedRetros(lastMonthRetroList, 2),
       comparison: {
         moodChange: Math.round((currentMonthData?.mood?.avgScore || 0) - (lastMonthData?.mood?.avgScore || 0) * 10) / 10,
         taskChange: (currentMonthData?.tasks?.completed || 0) - (lastMonthData?.tasks?.completed || 0),
@@ -842,8 +849,11 @@ class ProfileService {
       achievementsUnlocked: thisQuarterData?.achievements?.unlocked || 0,
       longestStreak: taskCompletion.streak?.longestStreak || 0,
       retrospectives: quarterRetroCount,
+      featuredRetros: this.pickFeaturedRetros(quarterRetroList, 4),
       summary: this.generateQuarterSummaryText(thisQuarterData, quarterRetroCount)
     };
+
+    const overallRetroList = retrospectiveRepository.getLatestRetros(userId, 5);
 
     const overall = {
       periodLabel: '自使用以来',
@@ -852,6 +862,7 @@ class ProfileService {
       totalTasksCompleted: taskCompletion.overallStats?.totalCompleted || 0,
       totalAchievements: achievementRhythm.stats?.totalUnlocked || 0,
       totalRetrospectives: overallRetroStats?.totalCount || 0,
+      featuredRetros: overallRetroList,
       summary: overallData?.averages ? 
         `累计记录情绪 ${moodCurve.overallStats?.totalRecords || 0} 次，撰写回顾 ${overallRetroStats?.totalCount || 0} 篇，阅读 ${roomPreference.totalChaptersRead || 0} 章故事，完成 ${taskCompletion.overallStats?.totalCompleted || 0} 个任务，解锁 ${achievementRhythm.stats?.totalUnlocked || 0} 个成就。感谢你的坚持！` :
         '感谢你一直以来的坚持，每一次记录都是成长的脚印。'
@@ -937,6 +948,36 @@ class ProfileService {
       return parts.join('，') + '，继续加油！';
     }
     return '本季度你一直在持续进步，继续保持！';
+  }
+
+  pickFeaturedRetros(retros, count = 3) {
+    if (!retros || retros.length === 0) return [];
+    
+    const sorted = [...retros].sort((a, b) => {
+      const aLen = a.content ? a.content.length : 0;
+      const bLen = b.content ? b.content.length : 0;
+      return bLen - aLen;
+    });
+    
+    const selected = [];
+    const usedTypes = new Set();
+    
+    for (const retro of sorted) {
+      if (selected.length >= count) break;
+      if (!usedTypes.has(retro.retrospect_type)) {
+        selected.push(retro);
+        usedTypes.add(retro.retrospect_type);
+      }
+    }
+    
+    for (const retro of sorted) {
+      if (selected.length >= count) break;
+      if (!selected.includes(retro)) {
+        selected.push(retro);
+      }
+    }
+    
+    return selected.slice(0, count);
   }
 
   getMonthRange(today, offset) {

@@ -1,6 +1,6 @@
 const retrospectiveRepository = require('../repositories/retrospectiveRepository');
 const moodRepository = require('../repositories/moodRepository');
-const achievementRepository = require('../repositories/achievementRepository');
+const taskRepository = require('../repositories/taskRepository');
 const achievementService = require('./achievementService');
 
 const VALID_RETROSPECT_TYPES = ['feeling', 'insight', 'gratitude', 'lesson', 'other'];
@@ -8,7 +8,7 @@ const VALID_MOOD_TYPES = ['happy', 'calm', 'sad', 'anxious', 'angry'];
 
 class RetrospectiveService {
   createRetrospective(userId, data) {
-    const { moodId, recordDate, timeSegment, retrospectType = 'feeling', content, moodShift, tags = [] } = data;
+    const { recordDate, timeSegment, retrospectType = 'feeling', content, moodShift, tags = [] } = data;
 
     if (!content || content.trim() === '') {
       throw new Error('回顾内容不能为空');
@@ -27,16 +27,20 @@ class RetrospectiveService {
       throw new Error('日期格式不正确，请使用 YYYY-MM-DD 格式');
     }
 
+    if (!timeSegment) {
+      throw new Error('请选择要回顾的时段');
+    }
+
     if (moodShift && !VALID_MOOD_TYPES.includes(moodShift)) {
       throw new Error('无效的心情转变类型');
     }
 
-    if (moodId) {
-      const mood = moodRepository.findByDateAndSegment(userId, recordDate, timeSegment);
-      if (!mood) {
-        throw new Error('对应的心情记录不存在');
-      }
+    const mood = moodRepository.findByDateAndSegment(userId, recordDate, timeSegment);
+    if (!mood) {
+      throw new Error('该时段暂无心情记录，无法添加回顾');
     }
+
+    const moodId = mood.id;
 
     const retrospective = retrospectiveRepository.create(
       userId,
@@ -50,30 +54,51 @@ class RetrospectiveService {
     );
 
     const taskUpdates = [];
+    const newlyCompletedTasks = [];
 
     const retroRecordResult = achievementService.updateTaskProgress(userId, 'retrospective_record', 1);
-    taskUpdates.push(...retroRecordResult.newlyCompleted);
+    taskUpdates.push(...retroRecordResult.updates);
+    newlyCompletedTasks.push(...retroRecordResult.newlyCompleted);
 
     const todayCount = retrospectiveRepository.getCountByDate(userId, this.getTodayStr());
     if (todayCount >= 3) {
       const deepRetroResult = achievementService.updateTaskProgress(userId, 'retrospective_deep', 1);
-      taskUpdates.push(...deepRetroResult.newlyCompleted);
+      taskUpdates.push(...deepRetroResult.updates);
+      newlyCompletedTasks.push(...deepRetroResult.newlyCompleted);
     }
 
     const totalCount = retrospectiveRepository.getTotalCount(userId);
 
-    const newlyUnlockedAchievements = achievementRepository.checkAndUnlock(
-      userId,
-      'retrospective_count',
-      totalCount
-    );
+    const retroTotalTaskIds = [22, 23, 24, 25];
+    retroTotalTaskIds.forEach(taskId => {
+      const task = taskRepository.findById(taskId);
+      if (task && task.type === 'once') {
+        const existing = taskRepository.getUserTask(userId, taskId, new Date());
+        const wasCompleted = existing && existing.is_completed;
+        if (!wasCompleted) {
+          const result = taskRepository.updateProgress(userId, taskId, totalCount);
+          if (result) {
+            taskUpdates.push({ taskId: task.id, type: 'once', current: result.current_progress });
+            if (result.is_completed) {
+              newlyCompletedTasks.push({
+                taskId: task.id,
+                title: task.title,
+                reward: task.reward,
+                type: 'once'
+              });
+            }
+          }
+        }
+      }
+    });
 
     const monthData = this.getMonthRetrospectives(userId, new Date().getFullYear(), new Date().getMonth() + 1);
 
     return {
       retrospective,
-      newlyCompletedTasks: taskUpdates,
-      newlyUnlockedAchievements,
+      newlyCompletedTasks,
+      taskUpdates,
+      totalCount,
       stats: monthData.stats,
       dateRetrospectives: retrospectiveRepository.findByDate(userId, recordDate)
     };

@@ -156,6 +156,18 @@ class RetrospectiveRepository {
     };
   }
 
+  getLatestRetros(userId, limit = 10) {
+    const stmt = db.prepare(`
+      SELECT id, user_id, mood_id, record_date, time_segment, retrospect_type, content, mood_shift, tags, created_at
+      FROM mood_retrospectives
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+    `);
+    const results = stmt.all(userId, limit);
+    return results.map(r => this.formatRetrospective(r));
+  }
+
   delete(userId, id) {
     const stmt = db.prepare(`
       DELETE FROM mood_retrospectives WHERE id = ? AND user_id = ?

@@ -272,7 +272,11 @@ class AchievementService {
       7: 'mood_tag_weight',
       8: 'mood_multi_segment',
       20: 'retrospective_record',
-      21: 'retrospective_deep'
+      21: 'retrospective_deep',
+      22: 'retrospective_total',
+      23: 'retrospective_total',
+      24: 'retrospective_total',
+      25: 'retrospective_total'
     };
     
     const taskAction = taskActionMap[task.id] || 'mood_record';

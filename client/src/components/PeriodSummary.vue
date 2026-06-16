@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { Calendar, Award, TrendingUp, Star, Sparkles, Target, Heart, BookOpen, Zap, Lightbulb, RefreshCw } from 'lucide-vue-next'
+import { Calendar, Award, TrendingUp, Star, Sparkles, Target, Heart, BookOpen, Zap, Lightbulb, RefreshCw, Sun, Sunrise, Moon } from 'lucide-vue-next'
 
 const props = defineProps({
   periodSummary: {
@@ -15,6 +15,40 @@ const currentQuarter = computed(() => props.periodSummary?.currentQuarter || {})
 const overall = computed(() => props.periodSummary?.overall || {})
 const insights = computed(() => props.periodSummary?.insights || [])
 const userTitle = computed(() => props.periodSummary?.userTitle || {})
+
+const retrospectTypes = [
+  { key: 'feeling', label: '感受补写', icon: Heart },
+  { key: 'insight', label: '新的感悟', icon: Lightbulb },
+  { key: 'gratitude', label: '感恩反思', icon: Award },
+  { key: 'lesson', label: '经验教训', icon: BookOpen },
+  { key: 'other', label: '其他回顾', icon: Sparkles }
+]
+
+function getRetrospectTypeLabel(type) {
+  const found = retrospectTypes.find(t => t.key === type)
+  return found ? found.label : type
+}
+
+function getRetrospectTypeIcon(type) {
+  const found = retrospectTypes.find(t => t.key === type)
+  return found ? found.icon : Sparkles
+}
+
+function getSegmentLabel(segment) {
+  const labels = { morning: '早晨', afternoon: '下午', evening: '晚间', day: '全天' }
+  return labels[segment] || segment
+}
+
+function getSegmentIcon(segment) {
+  const icons = { morning: Sunrise, afternoon: Sun, evening: Moon, day: Calendar }
+  return icons[segment] || Calendar
+}
+
+function formatRetroDate(dateStr) {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  return `${d.getMonth() + 1}/${d.getDate()}`
+}
 
 function getPeriodIcon(type) {
   const icons = {
@@ -149,6 +183,32 @@ function getInsightColor(type) {
             </li>
           </ul>
         </div>
+
+        <div class="period-featured-retros" v-if="currentMonth.featuredRetros && currentMonth.featuredRetros.length > 0">
+          <p class="featured-retros-title">
+            <BookOpen class="featured-retros-icon" />
+            本月精选回顾
+          </p>
+          <div class="featured-retros-list">
+            <div 
+              v-for="retro in currentMonth.featuredRetros" 
+              :key="retro.id"
+              class="featured-retro-card"
+            >
+              <div class="featured-retro-header">
+                <span class="featured-retro-type">
+                  <component :is="getRetrospectTypeIcon(retro.retrospect_type)" class="retro-type-mini-icon" />
+                  {{ getRetrospectTypeLabel(retro.retrospect_type) }}
+                </span>
+                <span class="featured-retro-meta">
+                  <component :is="getSegmentIcon(retro.time_segment)" class="segment-mini-icon" />
+                  {{ getSegmentLabel(retro.time_segment) }}
+                </span>
+              </div>
+              <p class="featured-retro-content">{{ retro.content }}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="period-card glass-card">
@@ -211,6 +271,29 @@ function getInsightColor(type) {
             <span>任务完成 {{ lastMonth.comparison.taskChange > 0 ? '+' : '' }}{{ lastMonth.comparison.taskChange }}</span>
           </div>
         </div>
+
+        <div class="period-featured-retros small" v-if="lastMonth.featuredRetros && lastMonth.featuredRetros.length > 0">
+          <p class="featured-retros-title">
+            <BookOpen class="featured-retros-icon" />
+            上月精选回顾
+          </p>
+          <div class="featured-retros-list">
+            <div 
+              v-for="retro in lastMonth.featuredRetros" 
+              :key="retro.id"
+              class="featured-retro-card small"
+            >
+              <div class="featured-retro-header">
+                <span class="featured-retro-type">
+                  <component :is="getRetrospectTypeIcon(retro.retrospect_type)" class="retro-type-mini-icon" />
+                  {{ getRetrospectTypeLabel(retro.retrospect_type) }}
+                </span>
+                <span class="featured-retro-date">{{ formatRetroDate(retro.record_date) }}</span>
+              </div>
+              <p class="featured-retro-content">{{ retro.content }}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="period-card glass-card">
@@ -254,6 +337,29 @@ function getInsightColor(type) {
         <div class="period-summary-text">
           <p>{{ currentQuarter.summary || '本季度你一直在持续进步，继续保持！' }}</p>
         </div>
+
+        <div class="period-featured-retros" v-if="currentQuarter.featuredRetros && currentQuarter.featuredRetros.length > 0">
+          <p class="featured-retros-title">
+            <BookOpen class="featured-retros-icon" />
+            季度精选回顾
+          </p>
+          <div class="featured-retros-list">
+            <div 
+              v-for="retro in currentQuarter.featuredRetros" 
+              :key="retro.id"
+              class="featured-retro-card"
+            >
+              <div class="featured-retro-header">
+                <span class="featured-retro-type">
+                  <component :is="getRetrospectTypeIcon(retro.retrospect_type)" class="retro-type-mini-icon" />
+                  {{ getRetrospectTypeLabel(retro.retrospect_type) }}
+                </span>
+                <span class="featured-retro-date">{{ formatRetroDate(retro.record_date) }}</span>
+              </div>
+              <p class="featured-retro-content">{{ retro.content }}</p>
+            </div>
+          </div>
+        </div>
       </div>
 
       <div class="period-card glass-card overall">
@@ -292,6 +398,29 @@ function getInsightColor(type) {
         
         <div class="overall-summary">
           <p class="overall-summary-text">{{ overall.summary || '感谢你一直以来的坚持，每一次记录都是成长的脚印。' }}</p>
+        </div>
+
+        <div class="period-featured-retros" v-if="overall.featuredRetros && overall.featuredRetros.length > 0">
+          <p class="featured-retros-title">
+            <BookOpen class="featured-retros-icon" />
+            最近回顾
+          </p>
+          <div class="featured-retros-list">
+            <div 
+              v-for="retro in overall.featuredRetros" 
+              :key="retro.id"
+              class="featured-retro-card"
+            >
+              <div class="featured-retro-header">
+                <span class="featured-retro-type">
+                  <component :is="getRetrospectTypeIcon(retro.retrospect_type)" class="retro-type-mini-icon" />
+                  {{ getRetrospectTypeLabel(retro.retrospect_type) }}
+                </span>
+                <span class="featured-retro-date">{{ formatRetroDate(retro.record_date) }}</span>
+              </div>
+              <p class="featured-retro-content">{{ retro.content }}</p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -848,5 +977,98 @@ function getInsightColor(type) {
   .overall-stats {
     grid-template-columns: repeat(2, 1fr);
   }
+}
+
+.period-featured-retros {
+  padding-top: 16px;
+  margin-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+
+  &.small {
+    padding-top: 12px;
+    margin-top: 12px;
+  }
+}
+
+.featured-retros-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 12px;
+}
+
+.featured-retros-icon {
+  width: 18px;
+  height: 18px;
+  color: #8b5cf6;
+}
+
+.featured-retros-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.featured-retro-card {
+  padding: 12px;
+  background: rgba(139, 92, 246, 0.08);
+  border-radius: var(--radius-md);
+  border: 1px solid rgba(139, 92, 246, 0.15);
+
+  &.small {
+    padding: 10px;
+  }
+}
+
+.featured-retro-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.featured-retro-type {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: #8b5cf6;
+}
+
+.retro-type-mini-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.featured-retro-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.segment-mini-icon {
+  width: 12px;
+  height: 12px;
+}
+
+.featured-retro-date {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+}
+
+.featured-retro-content {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 </style>

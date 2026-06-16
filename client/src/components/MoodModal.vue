@@ -57,6 +57,7 @@ const retrospectMoodShift = ref('')
 const retrospectTags = ref('')
 const isRetrospectiveSubmitting = ref(false)
 const showRetrospectForm = ref(false)
+const selectedRetrospectSegment = ref('')
 
 onMounted(() => {
   if (!moodStore.config) {
@@ -161,11 +162,22 @@ const retrospectTagsList = computed(() => {
 })
 
 const canSubmitRetrospective = computed(() => {
-  return retrospectContent.value.trim() && !isRetrospectiveSubmitting.value
+  return selectedRetrospectSegment.value && retrospectContent.value.trim() && !isRetrospectiveSubmitting.value
 })
 
 const selectedRetrospectTypeInfo = computed(() => {
   return retrospectTypes.find(t => t.key === selectedRetrospectType.value)
+})
+
+const recordedSegments = computed(() => {
+  return timeSegments.filter(seg => 
+    existingSegments.value.some(s => s.time_segment === seg.key)
+  )
+})
+
+const selectedRetroSegmentMood = computed(() => {
+  if (!selectedRetrospectSegment.value) return null
+  return existingSegments.value.find(s => s.time_segment === selectedRetrospectSegment.value)
 })
 
 function setTagWeight(tag, weight) {
@@ -235,7 +247,7 @@ async function handleSubmitRetrospective() {
   
   const result = await retrospectiveStore.createRetrospective({
     recordDate: props.date,
-    timeSegment: selectedSegment.value,
+    timeSegment: selectedRetrospectSegment.value,
     retrospectType: selectedRetrospectType.value,
     content: retrospectContent.value,
     moodShift: retrospectMoodShift.value || null,
@@ -251,6 +263,7 @@ async function handleSubmitRetrospective() {
     retrospectMoodShift.value = ''
     retrospectTags.value = ''
     showRetrospectForm.value = false
+    selectedRetrospectSegment.value = ''
     
     achievementStore.fetchTasks()
     
@@ -281,6 +294,11 @@ function getRetrospectTypeLabel(type) {
 function getRetrospectTypeIcon(type) {
   const found = retrospectTypes.find(t => t.key === type)
   return found ? found.icon : Sparkles
+}
+
+function getSegmentLabel(segmentKey) {
+  const found = timeSegments.find(s => s.key === segmentKey)
+  return found ? found.label : segmentKey
 }
 </script>
 
@@ -440,6 +458,38 @@ function getRetrospectTypeIcon(type) {
             </div>
 
             <div v-if="showRetrospectForm" class="retrospect-form">
+              <div class="retrospect-segment-selector">
+                <p class="section-label">选择要回顾的时段</p>
+                <div v-if="recordedSegments.length > 0" class="retrospect-segment-grid">
+                  <button
+                    v-for="segment in recordedSegments"
+                    :key="segment.key"
+                    class="retrospect-segment-btn"
+                    :class="{ selected: selectedRetrospectSegment === segment.key }"
+                    @click="selectedRetrospectSegment = segment.key"
+                  >
+                    <component :is="segment.icon" class="segment-icon" />
+                    <span class="segment-label">{{ segment.label }}</span>
+                    <span class="segment-time">{{ segment.timeRange }}</span>
+                  </button>
+                </div>
+                <p v-else class="no-segments-hint">该天暂无心情记录，无法添加回顾</p>
+              </div>
+
+              <div v-if="selectedRetroSegmentMood" class="retrospect-mood-context">
+                <p class="section-label">当时的心情记录</p>
+                <div class="mood-context-card">
+                  <span class="mood-context-emoji">{{ moodTypes.find(m => m.type === selectedRetroSegmentMood.mood_type)?.emoji }}</span>
+                  <div class="mood-context-info">
+                    <span class="mood-context-type">{{ moodTypes.find(m => m.type === selectedRetroSegmentMood.mood_type)?.label }}</span>
+                    <p v-if="selectedRetroSegmentMood.content" class="mood-context-content">{{ selectedRetroSegmentMood.content }}</p>
+                    <div v-if="selectedRetroSegmentMood.tags && selectedRetroSegmentMood.tags.length > 0" class="mood-context-tags">
+                      <span class="mood-context-tag" v-for="tag in selectedRetroSegmentMood.tags" :key="tag">#{{ tag }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
               <div class="retrospect-type-selector">
                 <p class="section-label">选择回顾类型</p>
                 <div class="retrospect-type-grid">
@@ -519,6 +569,7 @@ function getRetrospectTypeIcon(type) {
                     <span class="retro-type-label">{{ getRetrospectTypeLabel(retro.retrospect_type) }}</span>
                   </div>
                   <div class="retrospective-card-meta">
+                    <span class="retro-segment-badge">{{ getSegmentLabel(retro.time_segment) }}</span>
                     <span class="retro-time">{{ formatRetrospectiveTime(retro.created_at) }}</span>
                     <button 
                       class="retro-delete-btn"
@@ -1169,6 +1220,129 @@ function getRetrospectTypeIcon(type) {
   }
 }
 
+.retrospect-segment-selector {
+  margin-bottom: 20px;
+}
+
+.no-segments-hint {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  text-align: center;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+}
+
+.retrospect-segment-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.retrospect-segment-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 14px 10px;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.05);
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+
+  &:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  &.selected {
+    background: rgba(139, 92, 246, 0.15);
+    border-color: #8b5cf6;
+  }
+
+  .segment-icon {
+    width: 22px;
+    height: 22px;
+    color: var(--color-text-secondary);
+  }
+
+  .segment-label {
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--color-text);
+  }
+
+  .segment-time {
+    font-size: 0.7rem;
+    color: var(--color-text-muted);
+  }
+
+  &.selected .segment-icon {
+    color: #8b5cf6;
+  }
+
+  &.selected .segment-label {
+    color: #8b5cf6;
+  }
+}
+
+.retrospect-mood-context {
+  margin-bottom: 20px;
+}
+
+.mood-context-card {
+  display: flex;
+  gap: 14px;
+  padding: 14px;
+  background: rgba(251, 191, 36, 0.08);
+  border: 1px solid rgba(251, 191, 36, 0.2);
+  border-radius: var(--radius-md);
+}
+
+.mood-context-emoji {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.mood-context-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mood-context-type {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.mood-context-content {
+  font-size: 0.82rem;
+  color: var(--color-text-secondary);
+  line-height: 1.5;
+  margin-bottom: 8px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.mood-context-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.mood-context-tag {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  background: rgba(255, 255, 255, 0.06);
+  padding: 2px 8px;
+  border-radius: 10px;
+}
+
 .retrospect-form {
   background: rgba(255, 255, 255, 0.03);
   border-radius: var(--radius-md);
@@ -1328,6 +1502,15 @@ function getRetrospectTypeIcon(type) {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.retro-segment-badge {
+  font-size: 0.7rem;
+  color: #8b5cf6;
+  background: rgba(139, 92, 246, 0.15);
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-weight: 500;
 }
 
 .retro-time {

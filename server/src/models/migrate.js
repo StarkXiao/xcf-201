@@ -430,35 +430,45 @@ const migrate = db.transaction(() => {
   }
 
   // 添加回顾相关任务
-  const retroTaskCount = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE id IN (20, 21)").get().count;
-  if (retroTaskCount < 2) {
-    console.log('📝 添加回顾复写相关任务...');
+  const retroDailyTaskCount = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE id IN (20, 21)").get().count;
+  if (retroDailyTaskCount < 2) {
+    console.log('📝 添加回顾复写每日任务...');
     const insertTask = db.prepare(`
       INSERT OR IGNORE INTO tasks (id, title, description, type, target, reward, icon, reset_type, reset_days)
       VALUES (?, ?, ?, 'daily', ?, ?, ?, 'daily', 1)
     `);
     insertTask.run(20, '每日回顾', '为过去的心情记录添加回顾感受', 1, 15, 'book-open');
     insertTask.run(21, '深度反思', '一天内添加 3 条以上回顾内容', 3, 30, 'sparkles');
-    console.log('✅ 回顾任务添加完成');
+    console.log('✅ 回顾每日任务添加完成');
   } else {
-    console.log('⚠️  回顾任务已存在，跳过');
+    console.log('⚠️  回顾每日任务已存在，跳过');
   }
 
-  // 添加回顾相关成就
-  const retroAchievementCount = db.prepare("SELECT COUNT(*) as count FROM achievements WHERE condition_type = 'retrospective_count'").get().count;
-  if (retroAchievementCount === 0) {
-    console.log('📝 添加回顾复写相关成就...');
-    const insertAchievement = db.prepare(`
-      INSERT INTO achievements (name, description, icon, condition_type, condition_value)
-      VALUES (?, ?, ?, ?, ?)
+  // 添加回顾相关长期任务
+  const retroOnceTaskCount = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE id IN (22, 23, 24, 25)").get().count;
+  if (retroOnceTaskCount < 4) {
+    console.log('📝 添加回顾复写长期任务...');
+    const insertTask = db.prepare(`
+      INSERT OR IGNORE INTO tasks (id, title, description, type, target, reward, icon)
+      VALUES (?, ?, ?, 'once', ?, ?, ?)
     `);
-    insertAchievement.run('初次回望', '完成第 1 次心情回顾', '📖', 'retrospective_count', 1);
-    insertAchievement.run('回忆收集者', '累计完成 10 次心情回顾', '📚', 'retrospective_count', 10);
-    insertAchievement.run('深度反思者', '累计完成 50 次心情回顾', '🔮', 'retrospective_count', 50);
-    insertAchievement.run('时光旅人', '累计完成 100 次心情回顾', '⏳', 'retrospective_count', 100);
-    console.log('✅ 回顾成就添加完成');
+    insertTask.run(22, '初次回望', '完成第 1 次心情回顾', 1, 20, 'book-open');
+    insertTask.run(23, '回忆收集者', '累计完成 10 次心情回顾', 10, 50, 'book-marked');
+    insertTask.run(24, '深度反思者', '累计完成 50 次心情回顾', 50, 100, 'sparkles');
+    insertTask.run(25, '时光旅人', '累计完成 100 次心情回顾', 100, 200, 'clock');
+    console.log('✅ 回顾长期任务添加完成');
   } else {
-    console.log('⚠️  回顾成就已存在，跳过');
+    console.log('⚠️  回顾长期任务已存在，跳过');
+  }
+
+  // 移除回顾相关成就（改为长期任务）
+  const retroAchievementCount = db.prepare("SELECT COUNT(*) as count FROM achievements WHERE condition_type = 'retrospective_count'").get().count;
+  if (retroAchievementCount > 0) {
+    console.log('📝 迁移回顾成就为长期任务...');
+    db.prepare("DELETE FROM achievements WHERE condition_type = 'retrospective_count'").run();
+    console.log('✅ 回顾成就迁移完成');
+  } else {
+    console.log('⚠️  无回顾成就需要迁移，跳过');
   }
 });
 
