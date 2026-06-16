@@ -10,6 +10,10 @@ export const useRoomStore = defineStore('room', () => {
   const currentBranch = ref('main')
   const branches = ref([])
   const storyHistory = ref([])
+  const roomNotes = ref([])
+  const currentNote = ref(null)
+  const myNotes = ref([])
+  const myNotesTotal = ref(0)
 
   async function fetchRooms() {
     try {
@@ -126,6 +130,73 @@ export const useRoomStore = defineStore('room', () => {
     currentBranch.value = branch
   }
 
+  async function createNote(roomId, data) {
+    try {
+      const response = await roomApi.createNote(roomId, data)
+      if (response.code === 200) {
+        if (response.data.note) {
+          currentNote.value = response.data.note
+        }
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || '创建札记失败' }
+    }
+  }
+
+  async function fetchRoomNotes(roomId) {
+    try {
+      const response = await roomApi.getRoomNotes(roomId)
+      if (response.code === 200) {
+        roomNotes.value = response.data.notes || []
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || '获取房间札记失败' }
+    }
+  }
+
+  async function fetchStoryNote(roomId, storyId) {
+    try {
+      const response = await roomApi.getStoryNote(roomId, storyId)
+      if (response.code === 200) {
+        currentNote.value = response.data.note || null
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || '获取章节札记失败' }
+    }
+  }
+
+  async function deleteNote(noteId) {
+    try {
+      const response = await roomApi.deleteNote(noteId)
+      if (response.code === 200) {
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || '删除札记失败' }
+    }
+  }
+
+  async function fetchMyNotes(page = 1, pageSize = 10) {
+    try {
+      const response = await roomApi.getMyNotes(page, pageSize)
+      if (response.code === 200) {
+        myNotes.value = response.data.notes || []
+        myNotesTotal.value = response.data.totalCount || response.data.total || 0
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || '获取我的札记失败' }
+    }
+  }
+
   return {
     rooms,
     currentRoom,
@@ -134,6 +205,10 @@ export const useRoomStore = defineStore('room', () => {
     currentBranch,
     branches,
     storyHistory,
+    roomNotes,
+    currentNote,
+    myNotes,
+    myNotesTotal,
     fetchRooms,
     fetchRoomDetail,
     unlockRoom,
@@ -142,6 +217,11 @@ export const useRoomStore = defineStore('room', () => {
     chooseBranch,
     fetchStoryHistory,
     jumpToStory,
-    setCurrentBranch
+    setCurrentBranch,
+    createNote,
+    fetchRoomNotes,
+    fetchStoryNote,
+    deleteNote,
+    fetchMyNotes
   }
 })

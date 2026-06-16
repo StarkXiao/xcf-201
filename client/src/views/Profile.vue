@@ -4,9 +4,10 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
 import { useProfileStore } from '@/stores/profile'
+import { useRoomStore } from '@/stores/room'
 import { 
   User, Calendar, Heart, DoorOpen, Trophy, LogOut, Moon, Sparkles, Target, Zap, Link, Star,
-  User as UserIcon, TrendingUp, BarChart3, Award, FileText
+  User as UserIcon, TrendingUp, BarChart3, Award, FileText, PenLine, BookOpen
 } from 'lucide-vue-next'
 import MoodCurveChart from '@/components/MoodCurveChart.vue'
 import RoomPreference from '@/components/RoomPreference.vue'
@@ -18,9 +19,12 @@ const router = useRouter()
 const authStore = useAuthStore()
 const notificationStore = useNotificationStore()
 const profileStore = useProfileStore()
+const roomStore = useRoomStore()
 
 const isLoading = ref(false)
 const showLogoutConfirm = ref(false)
+const notesPage = ref(1)
+const notesPageSize = 10
 
 const activeMainTab = ref('basic')
 const activeGrowthTab = ref('summary')
@@ -35,7 +39,8 @@ const growthTabs = [
   { id: 'mood', label: '情绪曲线', icon: Heart },
   { id: 'rooms', label: '房间偏好', icon: DoorOpen },
   { id: 'tasks', label: '任务完成', icon: Target },
-  { id: 'achievements', label: '成就节奏', icon: Award }
+  { id: 'achievements', label: '成就节奏', icon: Award },
+  { id: 'notes', label: '札记沉淀', icon: PenLine }
 ]
 
 const user = computed(() => authStore.user)
@@ -67,6 +72,34 @@ function switchMainTab(tabId) {
   if (tabId === 'growth' && !growthProfile.value) {
     loadGrowthProfile()
   }
+}
+
+function switchGrowthTab(tabId) {
+  activeGrowthTab.value = tabId
+  if (tabId === 'notes') {
+    loadMyNotes()
+  }
+}
+
+async function loadMyNotes() {
+  await roomStore.fetchMyNotes(notesPage.value, notesPageSize.value)
+}
+
+function goToRoom(roomId) {
+  router.push(`/rooms/${roomId}`)
+}
+
+function formatNoteDate(dateStr) {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const now = new Date()
+  const diffTime = now - date
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24))
+  
+  if (diffDays === 0) return '今天'
+  if (diffDays === 1) return '昨天'
+  if (diffDays < 7) return `${diffDays}天前`
+  return `${date.getMonth() + 1}月${date.getDate()}日`
 }
 
 function confirmLogout() {
@@ -279,7 +312,7 @@ onMounted(() => {
               :key="tab.id"
               class="growth-tab-btn"
               :class="{ 'active': activeGrowthTab === tab.id }"
-              @click="activeGrowthTab = tab.id"
+              @click="switchGrowthTab(tab.id)"
             >
               <component :is="tab.icon" class="growth-tab-icon" />
               <span class="growth-tab-label">{{ tab.label }}</span>
@@ -314,6 +347,74 @@ onMounted(() => {
               :achievementRhythm="growthProfile.achievementRhythm" 
               :key="'achievements'"
             />
+            
+            <div v-else-if="activeGrowthTab === 'notes'" class="notes-section" :key="'notes'">
+              <div class="notes-stats glass-card">
+                <div class="notes-stat-item">
+                  <div class="notes-stat-icon">
+                    <PenLine class="icon" />
+                  </div>
+                  <div class="notes-stat-content">
+                    <span class="stat-value">{{ growthProfile.chapterNotes?.totalCount || 0 }}</span>
+                    <span class="stat-label">札记总数</span>
+                  </div>
+                </div>
+                <div class="notes-stat-item">
+                  <div class="notes-stat-icon secondary">
+                    <BookOpen class="icon" />
+                  </div>
+                  <div class="notes-stat-content">
+                    <span class="stat-value">{{ growthProfile.chapterNotes?.daysWithNotes || 0 }}</span>
+                    <span class="stat-label">写作天数</span>
+                  </div>
+                </div>
+                <div class="notes-stat-item">
+                  <div class="notes-stat-icon tertiary">
+                    <FileText class="icon" />
+                  </div>
+                  <div class="notes-stat-content">
+                    <span class="stat-value">{{ growthProfile.chapterNotes?.avgContentLength || 0 }}</span>
+                    <span class="stat-label">平均字数</span>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="notes-list-section">
+                <h3 class="section-title">我的札记</h3>
+                <div v-if="roomStore.myNotes.length === 0" class="empty-notes glass-card">
+                  <PenLine class="empty-icon" />
+                  <p class="empty-title">还没有札记</p>
+                  <p class="empty-desc">读完故事章节后，写下你的感受吧~</p>
+                </div>
+                <div v-else class="notes-list">
+                  <div 
+                    v-for="note in roomStore.myNotes" 
+                    :key="note.id"
+                    class="note-card glass-card"
+                    @click="goToRoom(note.roomId)"
+                  >
+                    <div class="note-card-header">
+                      <div class="note-chapter-info">
+                        <span class="note-room-name">{{ note.roomName }}</span>
+                        <span class="note-chapter-num">第{{ note.chapterNumber }}章</span>
+                      </div>
+                      <span class="note-date">{{ formatNoteDate(note.createdAt) }}</span>
+                    </div>
+                    <h4 class="note-card-title">{{ note.storyTitle }}</h4>
+                    <p class="note-card-preview">{{ note.content.slice(0, 100) }}{{ note.content.length > 100 ? '...' : '' }}</p>
+                    <div v-if="note.moodTags?.length" class="note-card-tags">
+                      <span 
+                        v-for="tag in note.moodTags" 
+                        :key="tag"
+                        class="note-card-tag"
+                      >
+                        {{ tag }}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
           </Transition>
         </div>
       </div>
@@ -908,6 +1009,190 @@ onMounted(() => {
   transform: translateY(-10px);
 }
 
+.notes-section {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.notes-stats {
+  display: flex;
+  gap: 16px;
+  padding: 24px;
+  margin-bottom: 24px;
+}
+
+.notes-stat-item {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.notes-stat-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  background: rgba(236, 72, 153, 0.15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  
+  .icon {
+    width: 24px;
+    height: 24px;
+    color: var(--color-primary);
+  }
+  
+  &.secondary {
+    background: rgba(232, 180, 217, 0.15);
+    .icon { color: var(--color-secondary); }
+  }
+  
+  &.tertiary {
+    background: rgba(163, 196, 243, 0.15);
+    .icon { color: var(--color-accent); }
+  }
+}
+
+.notes-stat-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.notes-stat-content .stat-value {
+  font-size: 1.8rem;
+  font-weight: 700;
+  font-family: var(--font-display);
+  color: var(--color-text);
+  line-height: 1;
+}
+
+.notes-stat-content .stat-label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.notes-list-section {
+  .section-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--color-text);
+    margin-bottom: 16px;
+    padding-left: 12px;
+    border-left: 3px solid var(--color-secondary);
+  }
+}
+
+.empty-notes {
+  text-align: center;
+  padding: 48px 24px;
+}
+
+.empty-notes .empty-icon {
+  width: 48px;
+  height: 48px;
+  color: var(--color-secondary);
+  margin-bottom: 16px;
+  opacity: 0.5;
+}
+
+.empty-notes .empty-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 8px;
+}
+
+.empty-notes .empty-desc {
+  color: var(--color-text-muted);
+  font-size: 0.9rem;
+  margin: 0;
+}
+
+.notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.note-card {
+  padding: 20px;
+  cursor: pointer;
+  transition: all var(--transition-normal);
+  
+  &:hover {
+    transform: translateY(-2px);
+    border-color: rgba(232, 180, 217, 0.3);
+  }
+}
+
+.note-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.note-chapter-info {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.note-room-name {
+  color: var(--color-secondary);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.note-chapter-num {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+
+.note-date {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+}
+
+.note-card-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 10px 0;
+}
+
+.note-card-preview {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  line-height: 1.6;
+  margin: 0 0 12px 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.note-card-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.note-card-tag {
+  padding: 3px 10px;
+  background: rgba(232, 180, 217, 0.15);
+  color: var(--color-secondary);
+  border-radius: var(--radius-full);
+  font-size: 0.75rem;
+}
+
 @media (max-width: 768px) {
   .profile-header {
     flex-direction: column;
@@ -943,6 +1228,15 @@ onMounted(() => {
   .growth-tab-btn {
     flex: 1 1 calc(50% - 6px);
     min-width: auto;
+  }
+  
+  .notes-stats {
+    flex-direction: column;
+    gap: 20px;
+  }
+  
+  .notes-stat-item {
+    width: 100%;
   }
 }
 </style>

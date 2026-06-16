@@ -4,6 +4,7 @@ const achievementRepository = require('../repositories/achievementRepository');
 const taskRepository = require('../repositories/taskRepository');
 const userRepository = require('../repositories/userRepository');
 const retrospectiveRepository = require('../repositories/retrospectiveRepository');
+const chapterNoteRepository = require('../repositories/chapterNoteRepository');
 const roomService = require('./roomService');
 
 const MOOD_SCORES = {
@@ -36,13 +37,15 @@ class ProfileService {
     const roomPreference = this.getRoomExplorationPreference(userId);
     const taskCompletion = this.getTaskCompletionRate(userId);
     const achievementRhythm = this.getAchievementUnlockRhythm(userId);
-    const periodSummary = this.generatePeriodSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm);
+    const chapterNotes = this.getChapterNotesProfile(userId);
+    const periodSummary = this.generatePeriodSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm, chapterNotes);
 
     return {
       moodCurve,
       roomPreference,
       taskCompletion,
       achievementRhythm,
+      chapterNotes,
       periodSummary
     };
   }
@@ -294,6 +297,61 @@ class ProfileService {
   estimateReadingTime(chapterCount) {
     const minutesPerChapter = 5;
     return chapterCount * minutesPerChapter;
+  }
+
+  getChapterNotesProfile(userId) {
+    const stats = chapterNoteRepository.getStats(userId);
+    const latestNotes = chapterNoteRepository.getLatestNotes(userId, 10);
+    const totalCount = chapterNoteRepository.getTotalCount(userId);
+
+    const monthlyNotes = this.getMonthlyNotesData(userId, 6);
+
+    const byRoom = {};
+    if (stats.roomDistribution) {
+      const rooms = roomRepository.findAll(userId);
+      for (const [roomId, count] of Object.entries(stats.roomDistribution)) {
+        const room = rooms.find(r => r.id === parseInt(roomId));
+        byRoom[roomId] = {
+          roomId: parseInt(roomId),
+          roomName: room?.name || `房间 ${roomId}`,
+          count
+        };
+      }
+    }
+
+    return {
+      totalCount,
+      stats,
+      latestNotes,
+      monthlyNotes,
+      byRoom: Object.values(byRoom).sort((a, b) => b.count - a.count)
+    };
+  }
+
+  getMonthlyNotesData(userId, months = 6) {
+    const today = new Date();
+    const monthlyData = [];
+
+    for (let i = months - 1; i >= 0; i--) {
+      const date = new Date(today);
+      date.setMonth(date.getMonth() - i);
+      const year = date.getFullYear();
+      const month = date.getMonth() + 1;
+
+      const count = chapterNoteRepository.getCountByMonth(userId, year, month);
+      const monthStats = chapterNoteRepository.getStats(userId, year, month);
+
+      monthlyData.push({
+        year,
+        month,
+        label: `${year}年${month}月`,
+        count,
+        avgContentLength: monthStats?.avgContentLength || 0,
+        daysWithNotes: monthStats?.daysWithNotes || 0
+      });
+    }
+
+    return monthlyData;
   }
 
   getTaskCompletionRate(userId) {
@@ -775,7 +833,7 @@ class ProfileService {
     };
   }
 
-  generatePeriodSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm) {
+  generatePeriodSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm, chapterNotes) {
     const today = new Date();
     const year = today.getFullYear();
     const month = today.getMonth() + 1;
@@ -783,7 +841,7 @@ class ProfileService {
     const currentMonthData = this.generateMonthSummary(moodCurve, roomPreference, taskCompletion, achievementRhythm, 0);
     const lastMonthData = this.generateMonthSummary(moodCurve, roomPreference, taskCompletion, achievementRhythm, 1);
     const thisQuarterData = this.generateQuarterSummary(moodCurve, roomPreference, taskCompletion, achievementRhythm, 0);
-    const overallData = this.generateOverallSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm);
+    const overallData = this.generateOverallSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm, chapterNotes);
 
     const currentMonthRetro = retrospectiveRepository.getStats(userId, year, month);
     const currentMonthRetroList = retrospectiveRepository.findByMonth(userId, year, month);
@@ -806,6 +864,21 @@ class ProfileService {
     
     const overallRetroStats = retrospectiveRepository.getStats(userId);
 
+    const currentMonthNotes = chapterNoteRepository.getCountByMonth(userId, year, month);
+    const currentMonthNoteList = this.getMonthNotes(userId, year, month);
+    const lastMonthNotes = chapterNoteRepository.getCountByMonth(userId, lastMonthYear, lastMonthMonth);
+    const lastMonthNoteList = this.getMonthNotes(userId, lastMonthYear, lastMonthMonth);
+    
+    let quarterNoteCount = 0;
+    const quarterNoteList = [];
+    for (let m = quarterStartMonth; m <= quarterEndMonth; m++) {
+      quarterNoteCount += chapterNoteRepository.getCountByMonth(userId, year, m);
+      quarterNoteList.push(...this.getMonthNotes(userId, year, m));
+    }
+    
+    const overallNoteStats = chapterNoteRepository.getStats(userId);
+    const overallNoteList = chapterNoteRepository.getLatestNotes(userId, 5);
+
     const currentMonth = {
       periodLabel: `${year}年${month}月`,
       avgMoodScore: currentMonthData?.mood?.avgScore || 0,
@@ -819,7 +892,9 @@ class ProfileService {
       retrospectives: currentMonthRetro?.totalCount || 0,
       retroTypes: currentMonthRetro?.typeDistribution || {},
       featuredRetros: this.pickFeaturedRetros(currentMonthRetroList, 3),
-      highlights: this.generateHighlights(currentMonthData, moodCurve, taskCompletion, achievementRhythm, 0, currentMonthRetro)
+      chapterNotes: currentMonthNotes,
+      featuredNotes: this.pickFeaturedNotes(currentMonthNoteList, 3),
+      highlights: this.generateHighlights(currentMonthData, moodCurve, taskCompletion, achievementRhythm, 0, currentMonthRetro, currentMonthNotes)
     };
 
     const lastMonth = {
@@ -834,10 +909,13 @@ class ProfileService {
       achievementsUnlocked: lastMonthData?.achievements?.unlocked || 0,
       retrospectives: lastMonthRetro?.totalCount || 0,
       featuredRetros: this.pickFeaturedRetros(lastMonthRetroList, 2),
+      chapterNotes: lastMonthNotes,
+      featuredNotes: this.pickFeaturedNotes(lastMonthNoteList, 2),
       comparison: {
         moodChange: Math.round((currentMonthData?.mood?.avgScore || 0) - (lastMonthData?.mood?.avgScore || 0) * 10) / 10,
         taskChange: (currentMonthData?.tasks?.completed || 0) - (lastMonthData?.tasks?.completed || 0),
-        retroChange: (currentMonthRetro?.totalCount || 0) - (lastMonthRetro?.totalCount || 0)
+        retroChange: (currentMonthRetro?.totalCount || 0) - (lastMonthRetro?.totalCount || 0),
+        noteChange: currentMonthNotes - lastMonthNotes
       }
     };
 
@@ -850,7 +928,9 @@ class ProfileService {
       longestStreak: taskCompletion.streak?.longestStreak || 0,
       retrospectives: quarterRetroCount,
       featuredRetros: this.pickFeaturedRetros(quarterRetroList, 4),
-      summary: this.generateQuarterSummaryText(thisQuarterData, quarterRetroCount)
+      chapterNotes: quarterNoteCount,
+      featuredNotes: this.pickFeaturedNotes(quarterNoteList, 4),
+      summary: this.generateQuarterSummaryText(thisQuarterData, quarterRetroCount, quarterNoteCount)
     };
 
     const overallRetroList = retrospectiveRepository.getLatestRetros(userId, 5);
@@ -862,9 +942,11 @@ class ProfileService {
       totalTasksCompleted: taskCompletion.overallStats?.totalCompleted || 0,
       totalAchievements: achievementRhythm.stats?.totalUnlocked || 0,
       totalRetrospectives: overallRetroStats?.totalCount || 0,
+      totalChapterNotes: overallNoteStats?.totalCount || 0,
       featuredRetros: overallRetroList,
+      featuredNotes: overallNoteList,
       summary: overallData?.averages ? 
-        `累计记录情绪 ${moodCurve.overallStats?.totalRecords || 0} 次，撰写回顾 ${overallRetroStats?.totalCount || 0} 篇，阅读 ${roomPreference.totalChaptersRead || 0} 章故事，完成 ${taskCompletion.overallStats?.totalCompleted || 0} 个任务，解锁 ${achievementRhythm.stats?.totalUnlocked || 0} 个成就。感谢你的坚持！` :
+        `累计记录情绪 ${moodCurve.overallStats?.totalRecords || 0} 次，撰写回顾 ${overallRetroStats?.totalCount || 0} 篇、札记 ${overallNoteStats?.totalCount || 0} 篇，阅读 ${roomPreference.totalChaptersRead || 0} 章故事，完成 ${taskCompletion.overallStats?.totalCompleted || 0} 个任务，解锁 ${achievementRhythm.stats?.totalUnlocked || 0} 个成就。感谢你的坚持！` :
         '感谢你一直以来的坚持，每一次记录都是成长的脚印。'
     };
 
@@ -874,7 +956,7 @@ class ProfileService {
       description: userTitleArr.length > 1 ? userTitleArr.slice(1).join(' · ') : '正在探索属于自己的心灵之旅'
     };
 
-    const insights = this.generateInsights(moodCurve, roomPreference, taskCompletion, achievementRhythm);
+    const insights = this.generateInsights(moodCurve, roomPreference, taskCompletion, achievementRhythm, chapterNotes);
 
     return {
       currentMonth,
@@ -891,7 +973,7 @@ class ProfileService {
     return `${year}年${quarterNames[quarter]}`;
   }
 
-  generateHighlights(monthData, moodCurve, taskCompletion, achievementRhythm, offset, retroStats) {
+  generateHighlights(monthData, moodCurve, taskCompletion, achievementRhythm, offset, retroStats, chapterNotes) {
     const highlights = [];
     
     if (monthData?.mood?.recordRate >= 80) {
@@ -917,6 +999,11 @@ class ProfileService {
     } else if (retroStats?.totalCount >= 2) {
       highlights.push(`本月有 ${retroStats.totalCount} 篇回顾记录，继续保持反思的习惯！`);
     }
+    if (chapterNotes >= 5) {
+      highlights.push(`本月写下了 ${chapterNotes} 篇章节札记，思考与沉淀并行！`);
+    } else if (chapterNotes >= 2) {
+      highlights.push(`本月有 ${chapterNotes} 篇札记记录，继续保持写作的习惯！`);
+    }
     
     if (highlights.length === 0) {
       highlights.push('本月继续探索，记录更多美好瞬间！');
@@ -925,7 +1012,7 @@ class ProfileService {
     return highlights.slice(0, 4);
   }
 
-  generateQuarterSummaryText(quarterData, retroCount = 0) {
+  generateQuarterSummaryText(quarterData, retroCount = 0, noteCount = 0) {
     if (!quarterData) return '本季度你一直在持续进步，继续保持！';
     
     const parts = [];
@@ -942,6 +1029,11 @@ class ProfileService {
       parts.push(`撰写了 ${retroCount} 篇深度回顾`);
     } else if (retroCount > 0) {
       parts.push(`有 ${retroCount} 篇回顾记录`);
+    }
+    if (noteCount >= 10) {
+      parts.push(`写下了 ${noteCount} 篇章节札记`);
+    } else if (noteCount > 0) {
+      parts.push(`有 ${noteCount} 篇札记记录`);
     }
     
     if (parts.length > 0) {
@@ -974,6 +1066,47 @@ class ProfileService {
       if (selected.length >= count) break;
       if (!selected.includes(retro)) {
         selected.push(retro);
+      }
+    }
+    
+    return selected.slice(0, count);
+  }
+
+  getMonthNotes(userId, year, month) {
+    const startDate = `${year}-${String(month).padStart(2, '0')}-01`;
+    const endDate = `${year}-${String(month).padStart(2, '0')}-31`;
+    
+    const allNotes = chapterNoteRepository.findByUserId(userId);
+    return allNotes.filter(note => {
+      const noteDate = note.createdAt?.split('T')[0];
+      return noteDate >= startDate && noteDate <= endDate;
+    });
+  }
+
+  pickFeaturedNotes(notes, count = 3) {
+    if (!notes || notes.length === 0) return [];
+    
+    const sorted = [...notes].sort((a, b) => {
+      const aLen = a.content ? a.content.length : 0;
+      const bLen = b.content ? b.content.length : 0;
+      return bLen - aLen;
+    });
+    
+    const selected = [];
+    const usedRooms = new Set();
+    
+    for (const note of sorted) {
+      if (selected.length >= count) break;
+      if (!usedRooms.has(note.roomId)) {
+        selected.push(note);
+        usedRooms.add(note.roomId);
+      }
+    }
+    
+    for (const note of sorted) {
+      if (selected.length >= count) break;
+      if (!selected.includes(note)) {
+        selected.push(note);
       }
     }
     
@@ -1115,7 +1248,7 @@ class ProfileService {
     };
   }
 
-  generateOverallSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm) {
+  generateOverallSummary(userId, moodCurve, roomPreference, taskCompletion, achievementRhythm, chapterNotes) {
     const userStats = userRepository.getStats(userId);
     const joinDate = userRepository.findById(userId)?.created_at;
 
@@ -1141,11 +1274,11 @@ class ProfileService {
         avgWeeklyTasks: daysSinceJoin > 0 ? Math.round(taskCompletion.overall.totalCompleted / daysSinceJoin * 70) / 10 : 0,
         avgReadingTimePerWeek: daysSinceJoin > 0 ? Math.round(roomPreference.totalReadingTime / daysSinceJoin * 7) : 0
       },
-      title: this.generateUserTitle(moodCurve, roomPreference, taskCompletion, achievementRhythm)
+      title: this.generateUserTitle(moodCurve, roomPreference, taskCompletion, achievementRhythm, chapterNotes)
     };
   }
 
-  generateUserTitle(moodCurve, roomPreference, taskCompletion, achievementRhythm) {
+  generateUserTitle(moodCurve, roomPreference, taskCompletion, achievementRhythm, chapterNotes) {
     const titles = [];
 
     if (moodCurve.overallStats.avgRecordRate >= 80) {
@@ -1178,6 +1311,15 @@ class ProfileService {
       titles.push('成就猎人');
     }
 
+    const noteCount = chapterNotes?.totalCount || 0;
+    if (noteCount >= 30) {
+      titles.push('故事哲人');
+    } else if (noteCount >= 10) {
+      titles.push('札记收藏家');
+    } else if (noteCount >= 3) {
+      titles.push('思考者');
+    }
+
     if (titles.length === 0) {
       titles.push('梦境旅者');
     }
@@ -1185,7 +1327,7 @@ class ProfileService {
     return titles.slice(0, 3);
   }
 
-  generateInsights(moodCurve, roomPreference, taskCompletion, achievementRhythm) {
+  generateInsights(moodCurve, roomPreference, taskCompletion, achievementRhythm, chapterNotes) {
     const insights = [];
 
     if (moodCurve.overallStats.trend === 'improving') {
@@ -1307,6 +1449,37 @@ class ProfileService {
         title: '房间探索家',
         message: `你已经解锁了 ${unlockedRooms} 个房间，探索进度超前！`,
         tags: ['房间', '探索']
+      });
+    }
+
+    const noteCount = chapterNotes?.totalCount || 0;
+    if (noteCount >= 20) {
+      insights.push({
+        type: 'positive',
+        title: '故事哲人',
+        message: `你已经写下了 ${noteCount} 篇章节札记，每一篇都是思考的结晶！`,
+        tags: ['札记', '深度']
+      });
+    } else if (noteCount >= 10) {
+      insights.push({
+        type: 'positive',
+        title: '札记收藏家',
+        message: `你已经收集了 ${noteCount} 篇札记，继续记录阅读的感动吧！`,
+        tags: ['札记', '成长']
+      });
+    } else if (noteCount >= 3) {
+      insights.push({
+        type: 'trend',
+        title: '思考启航',
+        message: `你已经写下 ${noteCount} 篇札记，开始了深度阅读之旅！`,
+        tags: ['札记', '开始']
+      });
+    } else if (noteCount === 0) {
+      insights.push({
+        type: 'suggestion',
+        title: '试试写札记',
+        message: '读完故事后写一篇札记吧，记录下那些触动你的瞬间。',
+        tags: ['札记', '建议']
       });
     }
 

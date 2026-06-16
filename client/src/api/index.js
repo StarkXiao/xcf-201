@@ -65,7 +65,12 @@ export const roomApi = {
   getBranchDetail: (roomId, branch) => api.get(`/rooms/${roomId}/branches/${branch}`),
   chooseBranch: (roomId, branch) => api.post(`/rooms/${roomId}/branches/${branch}/choose`),
   getStoryHistory: (roomId) => api.get(`/rooms/${roomId}/history`),
-  jumpToStory: (roomId, storyId) => api.post(`/rooms/${roomId}/jump/${storyId}`)
+  jumpToStory: (roomId, storyId) => api.post(`/rooms/${roomId}/jump/${storyId}`),
+  createNote: (roomId, data) => api.post(`/rooms/${roomId}/notes`, data),
+  getRoomNotes: (roomId) => api.get(`/rooms/${roomId}/notes`),
+  getStoryNote: (roomId, storyId) => api.get(`/rooms/${roomId}/notes/${storyId}`),
+  deleteNote: (noteId) => api.delete(`/rooms/notes/${noteId}`),
+  getMyNotes: (page = 1, pageSize = 10) => api.get('/rooms/notes/my/list', { params: { page, pageSize } })
 }
 
 export const achievementApi = {

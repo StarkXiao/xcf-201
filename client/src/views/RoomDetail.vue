@@ -6,7 +6,8 @@ import { useAchievementStore } from '@/stores/achievement'
 import { useNotificationStore } from '@/stores/notification'
 import { 
   ArrowLeft, ChevronLeft, ChevronRight, BookOpen, Bookmark, 
-  GitBranch, Clock, History, X, Lock, Check, Sparkles 
+  GitBranch, Clock, History, X, Lock, Check, Sparkles,
+  PenLine, Heart, Smile, CloudRain, Zap, Coffee
 } from 'lucide-vue-next'
 
 const route = useRoute()
@@ -25,6 +26,20 @@ const showBranchSelector = ref(false)
 const showHistoryPanel = ref(false)
 const showBranchChoice = ref(false)
 const branchChoices = ref([])
+
+const showNoteEditor = ref(false)
+const noteContent = ref('')
+const selectedMoodTags = ref([])
+const isSavingNote = ref(false)
+const currentNote = computed(() => roomStore.currentNote)
+
+const moodTagOptions = [
+  { key: '感动', label: '感动', icon: Heart, color: '#ff6b9d' },
+  { key: '开心', label: '开心', icon: Smile, color: '#ffd93d' },
+  { key: '治愈', label: '治愈', icon: Coffee, color: '#6bcf7f' },
+  { key: '沉思', label: '沉思', icon: CloudRain, color: '#6b9dff' },
+  { key: '震撼', label: '震撼', icon: Zap, color: '#c77dff' }
+]
 
 const currentRoom = computed(() => roomStore.currentRoom)
 const chapters = computed(() => currentRoom.value?.chapters || [])
@@ -72,7 +87,13 @@ async function loadRoom(branch = null) {
     const savedProgress = currentRoom.value?.currentChapter || 0
     currentChapterIndex.value = Math.max(0, savedProgress > 0 ? savedProgress - 1 : 0)
     if (chapters.value[currentChapterIndex.value]) {
-      startReading()
+      if (chapters.value[currentChapterIndex.value].isRead) {
+        displayedText.value = chapters.value[currentChapterIndex.value].content
+        isReading.value = false
+        loadCurrentNote()
+      } else {
+        startReading()
+      }
     }
   }
   isLoading.value = false
@@ -119,6 +140,7 @@ async function markAsRead() {
     achievementStore.fetchTasks()
     achievementStore.fetchTaskStats()
     achievementStore.fetchReminders()
+    loadCurrentNote()
   }
 }
 
@@ -221,6 +243,83 @@ function goToChapter(index) {
   
   currentChapterIndex.value = index
   startReading()
+  loadCurrentNote()
+}
+
+async function loadCurrentNote() {
+  if (!currentChapter.value?.id || !currentChapter.value?.isRead) {
+    roomStore.currentNote = null
+    return
+  }
+  
+  try {
+    await roomStore.fetchStoryNote(roomId.value, currentChapter.value.id)
+    if (currentNote.value) {
+      noteContent.value = currentNote.value.content || ''
+      selectedMoodTags.value = currentNote.value.moodTags || []
+    } else {
+      noteContent.value = ''
+      selectedMoodTags.value = []
+    }
+  } catch (e) {
+    console.error('加载札记失败', e)
+  }
+}
+
+function openNoteEditor() {
+  if (currentNote.value) {
+    noteContent.value = currentNote.value.content
+    selectedMoodTags.value = [...(currentNote.value.moodTags || [])]
+  } else {
+    noteContent.value = ''
+    selectedMoodTags.value = []
+  }
+  showNoteEditor.value = true
+}
+
+function closeNoteEditor() {
+  showNoteEditor.value = false
+}
+
+function toggleMoodTag(tagKey) {
+  const idx = selectedMoodTags.value.indexOf(tagKey)
+  if (idx >= 0) {
+    selectedMoodTags.value.splice(idx, 1)
+  } else {
+    if (selectedMoodTags.value.length < 3) {
+      selectedMoodTags.value.push(tagKey)
+    }
+  }
+}
+
+async function saveNote() {
+  if (!noteContent.value.trim()) {
+    notificationStore.warning('请输入札记内容', '内容不能为空')
+    return
+  }
+  
+  isSavingNote.value = true
+  
+  try {
+    const result = await roomStore.createNote(roomId.value, {
+      storyId: currentChapter.value.id,
+      content: noteContent.value.trim(),
+      moodTags: selectedMoodTags.value
+    })
+    
+    if (result.success) {
+      notificationStore.success('札记已保存', '保存成功')
+      showNoteEditor.value = false
+      achievementStore.fetchTasks()
+      achievementStore.fetchTaskStats()
+    } else {
+      notificationStore.error(result.message || '保存失败', '保存失败')
+    }
+  } catch (e) {
+    notificationStore.error('保存札记失败', '网络错误')
+  } finally {
+    isSavingNote.value = false
+  }
 }
 
 function formatDate(dateStr) {
@@ -324,6 +423,43 @@ onMounted(() => {
           <button class="btn-secondary" @click="skipAnimation">
             跳过动画
           </button>
+        </div>
+        
+        <div v-if="!isReading && currentChapter?.isRead" class="note-section">
+          <div v-if="currentNote" class="note-display">
+            <div class="note-header">
+              <div class="note-title">
+                <PenLine class="note-icon" />
+                <span>章节札记</span>
+              </div>
+              <button class="note-edit-btn" @click="openNoteEditor">
+                编辑
+              </button>
+            </div>
+            <div class="note-content">
+              {{ currentNote.content }}
+            </div>
+            <div v-if="currentNote.moodTags?.length" class="note-tags">
+              <span 
+                v-for="tag in currentNote.moodTags" 
+                :key="tag"
+                class="note-tag"
+              >
+                {{ tag }}
+              </span>
+            </div>
+            <div class="note-date">
+              {{ formatDate(currentNote.updatedAt || currentNote.createdAt) }}
+            </div>
+          </div>
+          
+          <div v-else class="note-empty">
+            <PenLine class="note-empty-icon" />
+            <p class="note-empty-text">读完这一章，有什么想说的吗？</p>
+            <button class="btn-primary note-write-btn" @click="openNoteEditor">
+              写下札记
+            </button>
+          </div>
         </div>
         
         <div class="story-footer">
@@ -430,6 +566,69 @@ onMounted(() => {
               </span>
               <span v-else class="choice-locked">未解锁</span>
             </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div v-if="showNoteEditor" class="modal-overlay" @click.self="closeNoteEditor">
+      <div class="modal note-editor-modal">
+        <div class="modal-header">
+          <h3 class="modal-title">
+            <PenLine class="title-icon" />
+            章节札记
+          </h3>
+          <button class="close-btn" @click="closeNoteEditor">
+            <X class="close-icon" />
+          </button>
+        </div>
+        <div class="modal-body">
+          <div class="note-chapter-info">
+            <span class="chapter-label">第 {{ currentChapterIndex + 1 }} 章</span>
+            <span class="chapter-name">{{ currentChapter?.title }}</span>
+          </div>
+          
+          <div class="mood-tags-section">
+            <p class="section-label">心情标签（最多选3个）</p>
+            <div class="mood-tags">
+              <button
+                v-for="tag in moodTagOptions"
+                :key="tag.key"
+                class="mood-tag-btn"
+                :class="{ active: selectedMoodTags.includes(tag.key) }"
+                :style="{ '--tag-color': tag.color }"
+                @click="toggleMoodTag(tag.key)"
+              >
+                <component :is="tag.icon" class="tag-icon" />
+                <span>{{ tag.label }}</span>
+              </button>
+            </div>
+          </div>
+          
+          <div class="note-input-section">
+            <p class="section-label">写下你的感受</p>
+            <textarea
+              v-model="noteContent"
+              class="note-textarea"
+              placeholder="这一章给你带来了什么感受？有什么想法想记录下来..."
+              rows="6"
+            ></textarea>
+            <div class="note-word-count">
+              {{ noteContent.length }} 字
+            </div>
+          </div>
+          
+          <div class="note-editor-actions">
+            <button class="btn-secondary" @click="closeNoteEditor">
+              取消
+            </button>
+            <button 
+              class="btn-primary" 
+              :disabled="isSavingNote || !noteContent.trim()"
+              @click="saveNote"
+            >
+              {{ isSavingNote ? '保存中...' : '保存札记' }}
+            </button>
           </div>
         </div>
       </div>
@@ -1212,6 +1411,250 @@ onMounted(() => {
     background: rgba(255, 255, 255, 0.15);
     color: var(--color-text);
   }
+}
+
+.btn-primary {
+  padding: 10px 24px;
+  background: linear-gradient(135deg, var(--color-secondary), var(--color-accent));
+  border: none;
+  border-radius: var(--radius-full);
+  color: var(--color-bg-dark);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  
+  &:hover:not(:disabled) {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 20px rgba(232, 180, 217, 0.4);
+  }
+  
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.note-section {
+  margin-top: 32px;
+  padding-top: 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.note-display {
+  background: rgba(232, 180, 217, 0.08);
+  border: 1px solid rgba(232, 180, 217, 0.2);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+}
+
+.note-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.note-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  color: var(--color-secondary);
+}
+
+.note-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.note-edit-btn {
+  padding: 6px 16px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-full);
+  color: var(--color-text-secondary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.15);
+    color: var(--color-text);
+  }
+}
+
+.note-content {
+  color: var(--color-text);
+  line-height: 1.8;
+  font-size: 0.95rem;
+  white-space: pre-wrap;
+  margin-bottom: 12px;
+}
+
+.note-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.note-tag {
+  padding: 4px 12px;
+  background: rgba(232, 180, 217, 0.2);
+  color: var(--color-secondary);
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+}
+
+.note-date {
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  text-align: right;
+}
+
+.note-empty {
+  text-align: center;
+  padding: 32px 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px dashed rgba(255, 255, 255, 0.15);
+  border-radius: var(--radius-lg);
+}
+
+.note-empty-icon {
+  width: 40px;
+  height: 40px;
+  color: var(--color-text-muted);
+  margin-bottom: 12px;
+  opacity: 0.6;
+}
+
+.note-empty-text {
+  color: var(--color-text-muted);
+  margin-bottom: 16px;
+  font-size: 0.9rem;
+}
+
+.note-write-btn {
+  padding: 8px 20px;
+  font-size: 0.85rem;
+}
+
+.note-editor-modal {
+  max-width: 560px;
+}
+
+.note-chapter-info {
+  text-align: center;
+  margin-bottom: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.chapter-label {
+  display: inline-block;
+  padding: 4px 12px;
+  background: rgba(232, 180, 217, 0.15);
+  color: var(--color-secondary);
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  margin-bottom: 8px;
+}
+
+.chapter-name {
+  display: block;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.section-label {
+  color: var(--color-text-secondary);
+  font-size: 0.9rem;
+  margin-bottom: 12px;
+  font-weight: 500;
+}
+
+.mood-tags-section {
+  margin-bottom: 24px;
+}
+
+.mood-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.mood-tag-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.1);
+  }
+  
+  &.active {
+    background: color-mix(in srgb, var(--tag-color) 20%, transparent);
+    border-color: var(--tag-color);
+    color: var(--tag-color);
+  }
+}
+
+.tag-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.note-input-section {
+  margin-bottom: 24px;
+}
+
+.note-textarea {
+  width: 100%;
+  padding: 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-lg);
+  color: var(--color-text);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  resize: vertical;
+  font-family: inherit;
+  transition: all var(--transition-fast);
+  
+  &:focus {
+    outline: none;
+    border-color: var(--color-secondary);
+    background: rgba(255, 255, 255, 0.08);
+  }
+  
+  &::placeholder {
+    color: var(--color-text-muted);
+  }
+}
+
+.note-word-count {
+  text-align: right;
+  color: var(--color-text-muted);
+  font-size: 0.8rem;
+  margin-top: 8px;
+}
+
+.note-editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 @media (max-width: 768px) {

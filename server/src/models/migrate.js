@@ -470,6 +470,67 @@ const migrate = db.transaction(() => {
   } else {
     console.log('⚠️  无回顾成就需要迁移，跳过');
   }
+
+  // 创建 chapter_notes 章节札记表
+  const chapterNotesTableExists = db.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='chapter_notes'").get();
+  if (!chapterNotesTableExists) {
+    console.log('📝 创建 chapter_notes 章节札记表...');
+    db.exec(`
+      CREATE TABLE chapter_notes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL,
+        room_id INTEGER NOT NULL,
+        story_id INTEGER NOT NULL,
+        chapter_number INTEGER NOT NULL,
+        branch_key VARCHAR(50) NOT NULL DEFAULT 'main',
+        content TEXT NOT NULL,
+        mood_tags VARCHAR(500),
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (room_id) REFERENCES rooms(id),
+        FOREIGN KEY (story_id) REFERENCES stories(id),
+        UNIQUE(user_id, story_id)
+      )
+    `);
+    console.log('✅ chapter_notes 表创建完成');
+  } else {
+    console.log('⚠️  chapter_notes 表已存在，跳过');
+  }
+
+  // 创建章节札记相关索引
+  const chapterNotesIndexExists = db.prepare("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_chapter_notes_user_id'").get();
+  if (!chapterNotesIndexExists) {
+    console.log('📝 创建章节札记相关索引...');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_chapter_notes_user_id ON chapter_notes(user_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_chapter_notes_room_id ON chapter_notes(room_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_chapter_notes_story_id ON chapter_notes(story_id)');
+    db.exec('CREATE INDEX IF NOT EXISTS idx_chapter_notes_created_at ON chapter_notes(created_at)');
+    console.log('✅ 章节札记索引创建完成');
+  }
+
+  // 添加章节札记相关任务
+  const noteTaskCount = db.prepare("SELECT COUNT(*) as count FROM tasks WHERE id IN (26, 27, 28, 29, 30)").get().count;
+  if (noteTaskCount < 5) {
+    console.log('📝 添加章节札记相关任务...');
+    const insertTask = db.prepare(`
+      INSERT OR IGNORE INTO tasks (id, title, description, type, target, reward, icon, reset_type, reset_days)
+      VALUES (?, ?, ?, 'daily', ?, ?, ?, 'daily', 1)
+    `);
+    insertTask.run(26, '章节札记', '阅读故事后写下你的感受和思考', 1, 20, 'book-open');
+    insertTask.run(27, '深度札记', '一天内写下 3 条以上章节札记', 3, 35, 'sparkles');
+    
+    const insertOnceTask = db.prepare(`
+      INSERT OR IGNORE INTO tasks (id, title, description, type, target, reward, icon)
+      VALUES (?, ?, ?, 'once', ?, ?, ?)
+    `);
+    insertOnceTask.run(28, '初次提笔', '写下第一篇章节札记', 1, 25, 'pen-tool');
+    insertOnceTask.run(29, '札记收藏家', '累计完成 20 篇章节札记', 20, 80, 'book-marked');
+    insertOnceTask.run(30, '故事哲人', '累计完成 50 篇章节札记', 50, 150, 'sparkles');
+    console.log('✅ 章节札记任务添加完成');
+  } else {
+    console.log('⚠️  章节札记任务已存在，跳过');
+  }
 });
 
 try {
