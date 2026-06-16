@@ -1,6 +1,6 @@
 <script setup>
 import { computed } from 'vue'
-import { DoorOpen, BookOpen, Clock, Heart, ChevronRight, Lock, Unlock } from 'lucide-vue-next'
+import { DoorOpen, BookOpen, Clock, Heart, ChevronRight, Lock, Unlock, Calendar, Target, Sparkles, CheckCircle } from 'lucide-vue-next'
 
 const props = defineProps({
   roomPreference: {
@@ -17,6 +17,31 @@ const maxActivityCount = computed(() => {
   if (activityDistribution.value.length === 0) return 1
   return Math.max(...activityDistribution.value.map(a => a.count), 1)
 })
+
+const conditionConfig = {
+  days: { label: '记录天数', icon: Calendar, color: '#e8b4d9' },
+  multiSegmentDays: { label: '多段记录', icon: Sparkles, color: '#a3c4f3' },
+  moodTypeCount: { label: '情绪类型', icon: Heart, color: '#ec4899' },
+  chapters: { label: '阅读章节', icon: BookOpen, color: '#34d399' },
+  tasks: { label: '完成任务', icon: Target, color: '#fbbf24' }
+}
+
+function getConditionIcon(key) {
+  return conditionConfig[key]?.icon || Calendar
+}
+
+function getConditionLabel(key) {
+  return conditionConfig[key]?.label || key
+}
+
+function getConditionColor(key) {
+  return conditionConfig[key]?.color || '#e8b4d9'
+}
+
+function getAllConditionsMet(room) {
+  if (!room.conditionProgress) return false
+  return Object.values(room.conditionProgress).every(c => c.met)
+}
 
 function formatReadingTime(minutes) {
   if (minutes < 60) return `${minutes}分钟`
@@ -181,10 +206,44 @@ function formatDate(dateStr) {
         </div>
         
         <div v-if="!room.isUnlocked" class="room-locked-info">
-          <p class="locked-text">
+          <div class="locked-header">
             <Lock class="lock-small-icon" />
-            {{ room.unlockCondition || '继续记录心情来解锁这个房间' }}
-          </p>
+            <span class="locked-title">{{ room.unlockCondition || '继续探索来解锁这个房间' }}</span>
+          </div>
+          
+          <div v-if="room.conditionProgress" class="unlock-conditions">
+            <div 
+              v-for="(condition, key) in room.conditionProgress" 
+              :key="key"
+              class="unlock-condition-item"
+              :class="{ 'met': condition.met }"
+            >
+              <div class="condition-icon" :style="{ color: getConditionColor(key) }">
+                <component :is="getConditionIcon(key)" class="icon" />
+              </div>
+              <div class="condition-content">
+                <span class="condition-name">{{ getConditionLabel(key) }}</span>
+                <div class="condition-bar-wrapper">
+                  <div class="condition-bar-bg">
+                    <div 
+                      class="condition-bar-fill"
+                      :style="{ 
+                        width: `${Math.min(100, (condition.current / condition.target) * 100)}%`,
+                        backgroundColor: getConditionColor(key)
+                      }"
+                    ></div>
+                  </div>
+                  <span class="condition-progress-text">{{ condition.current }} / {{ condition.target }}</span>
+                </div>
+              </div>
+              <CheckCircle v-if="condition.met" class="condition-check-icon" />
+            </div>
+          </div>
+          
+          <div v-if="getAllConditionsMet(room)" class="ready-hint">
+            <Sparkles class="sparkle-icon" />
+            <span>所有条件已满足，快去房间页解锁吧！</span>
+          </div>
         </div>
       </div>
     </div>
@@ -596,24 +655,140 @@ function formatDate(dateStr) {
 }
 
 .room-locked-info {
-  padding: 12px;
+  padding: 16px;
   background: rgba(255, 255, 255, 0.03);
   border-radius: var(--radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
-.locked-text {
+.locked-header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  font-size: 0.85rem;
-  color: var(--color-text-muted);
-  margin: 0;
+  gap: 8px;
+  margin-bottom: 14px;
 }
 
 .lock-small-icon {
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
   color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+.locked-title {
+  font-size: 0.9rem;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+}
+
+.unlock-conditions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.unlock-condition-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  
+  &.met {
+    background: rgba(74, 222, 128, 0.06);
+  }
+}
+
+.unlock-condition-item .condition-icon {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  
+  .icon {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+.condition-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.condition-name {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  margin-bottom: 4px;
+  display: block;
+}
+
+.condition-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.condition-bar-bg {
+  flex: 1;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+}
+
+.condition-bar-fill {
+  height: 100%;
+  border-radius: var(--radius-full);
+  transition: width 0.5s ease;
+  opacity: 0.8;
+}
+
+.condition-progress-text {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  min-width: 50px;
+  text-align: right;
+  
+  .unlock-condition-item.met & {
+    color: var(--color-success);
+  }
+}
+
+.condition-check-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
+.ready-hint {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 14px;
+  padding: 10px;
+  background: rgba(74, 222, 128, 0.1);
+  border-radius: var(--radius-sm);
+  border: 1px solid rgba(74, 222, 128, 0.3);
+  
+  .sparkle-icon {
+    width: 16px;
+    height: 16px;
+    color: #4ade80;
+  }
+  
+  span {
+    font-size: 0.85rem;
+    color: #4ade80;
+    font-weight: 500;
+  }
 }
 
 @media (max-width: 768px) {

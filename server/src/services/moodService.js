@@ -3,6 +3,7 @@ const userRepository = require('../repositories/userRepository');
 const roomRepository = require('../repositories/roomRepository');
 const achievementRepository = require('../repositories/achievementRepository');
 const achievementService = require('./achievementService');
+const roomService = require('./roomService');
 
 const VALID_MOOD_TYPES = ['happy', 'calm', 'sad', 'anxious', 'angry'];
 const VALID_SEGMENTS = ['morning', 'afternoon', 'evening', 'day'];
@@ -146,19 +147,13 @@ class MoodService {
     
     for (const room of rooms) {
       if (!room.is_unlocked) {
-        let canUnlock = true;
+        const checkResult = roomService.checkRoomUnlockConditions(userId, room);
         
-        if (room.required_days > 0 && streakDays < room.required_days) {
-          canUnlock = false;
-        }
-        
-        if (room.required_multi_segment_days > 0 && multiSegmentDays < room.required_multi_segment_days) {
-          canUnlock = false;
-        }
-        
-        if (canUnlock && (room.required_days > 0 || room.required_multi_segment_days > 0)) {
+        if (checkResult.canUnlock) {
           const result = roomRepository.unlockRoom(userId, room.id);
           if (result.success) {
+            roomRepository.ensureBranchProgress(userId, room.id, 'main');
+            roomRepository.setActiveBranch(userId, room.id, 'main');
             newlyUnlocked.push(room);
           }
         }

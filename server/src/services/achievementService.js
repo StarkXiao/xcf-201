@@ -320,8 +320,8 @@ class AchievementService {
     for (let i = 0; i < 365; i++) {
       const dateStr = `${currentDate.getFullYear()}-${String(currentDate.getMonth() + 1).padStart(2, '0')}-${String(currentDate.getDate()).padStart(2, '0')}`;
       
-      const hasRecord = dates.some(d => {
-        const d = new Date(d.record_date || d);
+      const hasRecord = dates.some(record => {
+        const d = new Date(record.record_date || record);
         const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
         return dStr === dateStr;
       });

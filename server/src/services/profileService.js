@@ -3,6 +3,7 @@ const roomRepository = require('../repositories/roomRepository');
 const achievementRepository = require('../repositories/achievementRepository');
 const taskRepository = require('../repositories/taskRepository');
 const userRepository = require('../repositories/userRepository');
+const roomService = require('./roomService');
 
 const MOOD_SCORES = {
   happy: 5,
@@ -185,6 +186,7 @@ class ProfileService {
 
   getRoomExplorationPreference(userId) {
     const rooms = roomRepository.findAll(userId);
+    const userProgress = roomRepository.getUnlockProgress(userId);
     const allBranchProgress = {};
     const readingHistory = [];
     const roomPreferences = [];
@@ -214,12 +216,25 @@ class ProfileService {
         branch: h.branch_label || h.branch_key
       }));
 
+      const unlockConditions = room.unlock_conditions ? JSON.parse(room.unlock_conditions) : null;
+      const requiredMoodTypes = room.required_mood_types ? JSON.parse(room.required_mood_types) : null;
+      const requiredTasks = room.required_tasks ? JSON.parse(room.required_tasks) : null;
+      
+      const conditionProgress = !room.is_unlocked && unlockConditions
+        ? roomService.getConditionProgress(userId, unlockConditions, requiredMoodTypes, requiredTasks, userProgress)
+        : null;
+
       roomPreferences.push({
         id: room.id,
         name: room.name,
         description: room.description,
         isUnlocked: !!room.is_unlocked,
         unlockedAt: room.unlocked_at,
+        unlockCondition: room.unlock_condition,
+        requiredDays: room.required_days,
+        requiredMultiSegmentDays: room.required_multi_segment_days,
+        unlockConditions: unlockConditions,
+        conditionProgress: conditionProgress,
         totalChapters,
         currentChapter,
         progress,
