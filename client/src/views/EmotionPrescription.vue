@@ -89,11 +89,9 @@ const scoreColor = computed(() => {
 async function loadData() {
   isLoading.value = true
   try {
-    await Promise.all([
-      prescriptionStore.fetchLatest(periodType.value),
-      prescriptionStore.fetchList(periodType.value, 6),
-      prescriptionStore.fetchArchives(null, 6)
-    ])
+    await prescriptionStore.fetchLatest(periodType.value)
+    await prescriptionStore.fetchList(periodType.value, 6)
+    await prescriptionStore.fetchArchives(null, 6)
     
     if (prescription.value && prescription.value.id && !prescription.value.isViewed) {
       const viewResult = await prescriptionStore.viewPrescription(prescription.value.id)

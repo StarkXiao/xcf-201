@@ -528,11 +528,6 @@ class EmotionPrescriptionService {
   generateMonthlyArchive(userId, year, month) {
     const periodLabel = `${year}年${month}月`;
     
-    const existing = prescriptionRepository.findArchivesByType(userId, 'monthly', 1);
-    if (existing.length > 0 && existing[0].periodLabel === periodLabel) {
-      return existing[0];
-    }
-    
     const moodCurve = this.getMonthlyMoodData(userId, year, month);
     const roomData = this.getMonthlyRoomData(userId, year, month);
     const taskData = this.getMonthlyTaskData(userId, year, month);
@@ -707,6 +702,10 @@ class EmotionPrescriptionService {
         prescription = this.generateDailyPrescription(userId);
       }
     }
+    
+    const now = new Date();
+    this.generateMonthlyArchive(userId, now.getFullYear(), now.getMonth() + 1);
+    
     return prescription;
   }
 

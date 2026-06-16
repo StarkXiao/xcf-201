@@ -1,13 +1,16 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
 import { useProfileStore } from '@/stores/profile'
 import { useRoomStore } from '@/stores/room'
+import { useEmotionPrescriptionStore } from '@/stores/emotionPrescription'
+import { useAchievementStore } from '@/stores/achievement'
 import { 
   User, Calendar, Heart, DoorOpen, Trophy, LogOut, Moon, Sparkles, Target, Zap, Link, Star,
-  User as UserIcon, TrendingUp, BarChart3, Award, FileText, PenLine, BookOpen, HeartPulse, ChevronRight
+  User as UserIcon, TrendingUp, BarChart3, Award, FileText, PenLine, BookOpen, HeartPulse, ChevronRight,
+  TrendingDown, Minus, Activity
 } from 'lucide-vue-next'
 import MoodCurveChart from '@/components/MoodCurveChart.vue'
 import RoomPreference from '@/components/RoomPreference.vue'
@@ -20,6 +23,8 @@ const authStore = useAuthStore()
 const notificationStore = useNotificationStore()
 const profileStore = useProfileStore()
 const roomStore = useRoomStore()
+const prescriptionStore = useEmotionPrescriptionStore()
+const achievementStore = useAchievementStore()
 
 const isLoading = ref(false)
 const showLogoutConfirm = ref(false)
@@ -48,6 +53,59 @@ const user = computed(() => authStore.user)
 const profile = computed(() => authStore.user)
 const growthProfile = computed(() => profileStore.growthProfile)
 const profileLoading = computed(() => profileStore.isLoading)
+const latestPrescription = computed(() => prescriptionStore.latestPrescription)
+const latestArchive = computed(() => {
+  const archives = prescriptionStore.archives
+  return archives && archives.length > 0 ? archives[0] : null
+})
+const prescriptionLoading = computed(() => prescriptionStore.loading)
+
+const moodEmojis = {
+  happy: '😊',
+  calm: '😌',
+  sad: '😢',
+  anxious: '😰',
+  angry: '😠'
+}
+
+const moodLabels = {
+  happy: '开心',
+  calm: '平静',
+  sad: '忧伤',
+  anxious: '焦虑',
+  angry: '愤怒'
+}
+
+const moodColors = {
+  happy: 'var(--mood-happy)',
+  calm: 'var(--mood-calm)',
+  sad: 'var(--mood-sad)',
+  anxious: 'var(--mood-anxious)',
+  angry: 'var(--mood-angry)'
+}
+
+const trendLabels = {
+  improving: { label: '上升', icon: TrendingUp, color: 'var(--color-success)' },
+  declining: { label: '下降', icon: TrendingDown, color: 'var(--color-danger)' },
+  stable: { label: '稳定', icon: Minus, color: 'var(--color-accent)' },
+  volatile: { label: '波动', icon: Activity, color: 'var(--color-warning)' },
+  low: { label: '低迷', icon: TrendingDown, color: 'var(--mood-sad)' },
+  high: { label: '愉悦', icon: TrendingUp, color: 'var(--mood-happy)' }
+}
+
+const scorePercent = computed(() => {
+  if (!latestPrescription.value) return 0
+  return Math.min(100, (latestPrescription.value.avgMoodScore / 5) * 100)
+})
+
+const scoreColor = computed(() => {
+  if (!latestPrescription.value) return 'var(--color-text-muted)'
+  const score = latestPrescription.value.avgMoodScore
+  if (score >= 4) return 'var(--mood-happy)'
+  if (score >= 3) return 'var(--mood-calm)'
+  if (score >= 2) return 'var(--mood-sad)'
+  return 'var(--mood-anxious)'
+})
 
 const joinDate = computed(() => {
   if (!profile.value?.createdAt) return ''
@@ -68,6 +126,27 @@ async function loadGrowthProfile() {
   await profileStore.fetchGrowthProfile()
 }
 
+async function loadPrescriptionData() {
+  try {
+    await Promise.all([
+      prescriptionStore.fetchLatest('weekly'),
+      prescriptionStore.fetchArchives(null, 3)
+    ])
+    
+    if (latestPrescription.value?.id && !latestPrescription.value.isViewed) {
+      const viewResult = await prescriptionStore.viewPrescription(latestPrescription.value.id)
+      if (viewResult.success && viewResult.data?.taskUpdates?.length > 0) {
+        viewResult.data.taskUpdates.forEach(task => {
+          notificationStore.success(`任务完成：${task.title} +${task.reward}星币`)
+        })
+        achievementStore.fetchTasks()
+      }
+    }
+  } catch (error) {
+    console.error('加载处方数据失败:', error)
+  }
+}
+
 function switchMainTab(tabId) {
   activeMainTab.value = tabId
   if (tabId === 'growth' && !growthProfile.value) {
@@ -79,6 +158,9 @@ function switchGrowthTab(tabId) {
   activeGrowthTab.value = tabId
   if (tabId === 'notes') {
     loadMyNotes()
+  }
+  if (tabId === 'prescription') {
+    loadPrescriptionData()
   }
 }
 
@@ -323,18 +405,141 @@ onMounted(() => {
 
         <div class="growth-content">
           <Transition name="fade" mode="out-in">
-            <div v-if="activeGrowthTab === 'prescription'" class="prescription-section glass-card" :key="'prescription'">
-              <div class="prescription-entry">
-                <div class="prescription-entry-icon">
-                  <HeartPulse class="icon" />
+            <div v-if="activeGrowthTab === 'prescription'" class="prescription-section" :key="'prescription'">
+              <div v-if="prescriptionLoading" class="loading-container">
+                <div class="loading-spinner"></div>
+                <p class="loading-text">正在生成情绪处方笺...</p>
+              </div>
+              
+              <div v-else-if="latestPrescription">
+                <div class="prescription-summary glass-card">
+                  <div class="summary-header">
+                    <div class="summary-score">
+                      <svg class="score-ring" width="120" height="120" viewBox="0 0 120 120">
+                        <circle class="score-ring-bg" cx="60" cy="60" r="50" fill="none" stroke="var(--color-border)" stroke-width="10"/>
+                        <circle 
+                          class="score-ring-progress" 
+                          cx="60" cy="60" r="50" 
+                          fill="none" 
+                          :stroke="scoreColor" 
+                          stroke-width="10"
+                          stroke-linecap="round"
+                          :stroke-dasharray="314"
+                          :stroke-dashoffset="314 - (314 * scorePercent / 100)"
+                          transform="rotate(-90 60 60)"
+                        />
+                        <text class="score-text" x="60" y="58" text-anchor="middle" :fill="scoreColor">{{ latestPrescription.avgMoodScore?.toFixed(1) || '0.0' }}</text>
+                        <text class="score-label" x="60" y="78" text-anchor="middle" fill="var(--color-text-muted)">情绪指数</text>
+                      </svg>
+                    </div>
+                    
+                    <div class="summary-info">
+                      <div class="summary-period">
+                        <Calendar class="icon" />
+                        <span>{{ latestPrescription.startDate }} ~ {{ latestPrescription.endDate }}</span>
+                      </div>
+                      <div class="summary-stats">
+                        <div class="summary-stat">
+                          <div class="stat-icon">
+                            <component :is="trendLabels[latestPrescription.moodTrend]?.icon || Minus" />
+                          </div>
+                          <div class="stat-content">
+                            <span class="stat-value" :style="{ color: trendLabels[latestPrescription.moodTrend]?.color }">{{ trendLabels[latestPrescription.moodTrend]?.label || '稳定' }}</span>
+                            <span class="stat-label">情绪趋势</span>
+                          </div>
+                        </div>
+                        <div class="summary-stat">
+                          <div class="stat-icon dominant">
+                            <span class="mood-emoji">{{ moodEmojis[latestPrescription.dominantMood] || '😌' }}</span>
+                          </div>
+                          <div class="stat-content">
+                            <span class="stat-value" :style="{ color: moodColors[latestPrescription.dominantMood] }">{{ moodLabels[latestPrescription.dominantMood] || '平静' }}</span>
+                            <span class="stat-label">主导情绪</span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-                <div class="prescription-entry-content">
-                  <h3>情绪处方笺</h3>
-                  <p>根据你的情绪记录，生成专属陪伴建议与阶段成长档案</p>
+                
+                <div v-if="latestPrescription.highlights?.length > 0" class="highlights-section glass-card">
+                  <h3 class="section-title">
+                    <Sparkles class="icon" />
+                    本周期亮点
+                  </h3>
+                  <div class="highlights-list">
+                    <div v-for="(highlight, index) in latestPrescription.highlights.slice(0, 3)" :key="index" class="highlight-item">
+                      <span class="highlight-icon">{{ highlight.icon || '✨' }}</span>
+                      <span class="highlight-text">{{ highlight.content || highlight.text }}</span>
+                    </div>
+                  </div>
                 </div>
-                <button class="entry-btn" @click="router.push('/prescription')">
-                  <span>查看详情</span>
-                  <ChevronRight class="entry-icon" />
+                
+                <div v-if="latestPrescription.companionAdvice?.length > 0" class="companion-section glass-card">
+                  <h3 class="section-title">
+                    <HeartPulse class="icon" />
+                    陪伴寄语
+                  </h3>
+                  <div class="companion-advice">
+                    <p v-for="(advice, index) in latestPrescription.companionAdvice.slice(0, 2)" :key="index" class="advice-text">
+                      <span v-if="advice.icon" class="advice-icon">{{ advice.icon }}</span>
+                      {{ typeof advice === 'string' ? advice : (advice.content || advice.title) }}
+                    </p>
+                  </div>
+                </div>
+                
+                <div v-if="latestArchive" class="archive-summary glass-card">
+                  <h3 class="section-title">
+                    <FileText class="icon" />
+                    {{ latestArchive.periodLabel }}成长档案
+                  </h3>
+                  <div class="archive-stats">
+                    <div class="archive-stat">
+                      <div class="archive-stat-icon">
+                        <Calendar class="icon" />
+                      </div>
+                      <div class="archive-stat-content">
+                        <span class="stat-value">{{ latestArchive.totalMoodRecords || 0 }}</span>
+                        <span class="stat-label">情绪记录</span>
+                      </div>
+                    </div>
+                    <div class="archive-stat">
+                      <div class="archive-stat-icon secondary">
+                        <BookOpen class="icon" />
+                      </div>
+                      <div class="archive-stat-content">
+                        <span class="stat-value">{{ latestArchive.totalChaptersRead || 0 }}</span>
+                        <span class="stat-label">阅读章节</span>
+                      </div>
+                    </div>
+                    <div class="archive-stat">
+                      <div class="archive-stat-icon tertiary">
+                        <Trophy class="icon" />
+                      </div>
+                      <div class="archive-stat-content">
+                        <span class="stat-value">{{ latestArchive.totalTasksCompleted || 0 }}</span>
+                        <span class="stat-label">完成任务</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div v-if="latestArchive.title" class="archive-title">
+                    <Star class="icon" />
+                    <span>{{ latestArchive.title }}</span>
+                  </div>
+                </div>
+                
+                <button class="view-full-btn glass-card" @click="router.push('/prescription')">
+                  <span>查看完整处方笺</span>
+                  <ChevronRight class="icon" />
+                </button>
+              </div>
+              
+              <div v-else class="empty-state glass-card">
+                <HeartPulse class="empty-icon" />
+                <p class="empty-title">暂无情绪处方笺</p>
+                <p class="empty-desc">先去心情日历记录今天的心情吧~</p>
+                <button class="empty-action-btn" @click="router.push('/calendar')">
+                  记录心情
                 </button>
               </div>
             </div>
@@ -1212,7 +1417,305 @@ onMounted(() => {
 }
 
 .prescription-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.prescription-summary {
   padding: 24px;
+  
+  .summary-header {
+    display: flex;
+    gap: 32px;
+    align-items: center;
+    
+    @media (max-width: 640px) {
+      flex-direction: column;
+      gap: 20px;
+    }
+  }
+  
+  .summary-score {
+    flex-shrink: 0;
+    
+    .score-ring {
+      .score-text {
+        font-size: 1.5rem;
+        font-weight: 700;
+      }
+      
+      .score-label {
+        font-size: 0.75rem;
+      }
+    }
+  }
+  
+  .summary-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+  }
+  
+  .summary-period {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--color-text-muted);
+    font-size: 0.9rem;
+    
+    .icon {
+      width: 16px;
+      height: 16px;
+    }
+  }
+  
+  .summary-stats {
+    display: flex;
+    gap: 32px;
+    
+    @media (max-width: 640px) {
+      gap: 20px;
+    }
+  }
+  
+  .summary-stat {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    
+    .stat-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-lg);
+      background: rgba(34, 197, 94, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      
+      .icon {
+        width: 22px;
+        height: 22px;
+        color: var(--color-success);
+      }
+      
+      &.dominant {
+        background: rgba(255, 215, 0, 0.15);
+        
+        .mood-emoji {
+          font-size: 22px;
+        }
+      }
+    }
+    
+    .stat-content {
+      display: flex;
+      flex-direction: column;
+      
+      .stat-value {
+        font-size: 1.1rem;
+        font-weight: 600;
+      }
+      
+      .stat-label {
+        font-size: 0.8rem;
+        color: var(--color-text-muted);
+      }
+    }
+  }
+}
+
+.highlights-section,
+.companion-section,
+.archive-summary {
+  padding: 20px;
+}
+
+.section-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 0 0 16px 0;
+  color: var(--color-text);
+  
+  .icon {
+    width: 18px;
+    height: 18px;
+    color: var(--color-secondary);
+  }
+}
+
+.highlights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.highlight-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 16px;
+  background: rgba(139, 92, 246, 0.08);
+  border-radius: var(--radius-md);
+  
+  .highlight-icon {
+    font-size: 1.1rem;
+    flex-shrink: 0;
+  }
+  
+  .highlight-text {
+    font-size: 0.9rem;
+    color: var(--color-text);
+    line-height: 1.5;
+  }
+}
+
+.companion-advice {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.advice-text {
+  font-size: 0.95rem;
+  line-height: 1.7;
+  color: var(--color-text);
+  margin: 0;
+  padding-left: 16px;
+  border-left: 3px solid var(--color-secondary);
+  font-style: italic;
+  
+  .advice-icon {
+    margin-right: 6px;
+    font-style: normal;
+  }
+}
+
+.archive-summary {
+  .archive-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    margin-bottom: 16px;
+    
+    @media (max-width: 640px) {
+      gap: 10px;
+    }
+  }
+  
+  .archive-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    padding: 16px;
+    background: rgba(0, 0, 0, 0.03);
+    border-radius: var(--radius-md);
+    
+    @media (max-width: 640px) {
+      padding: 12px 8px;
+    }
+  }
+  
+  .archive-stat-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-lg);
+    background: rgba(59, 130, 246, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    .icon {
+      width: 20px;
+      height: 20px;
+      color: var(--color-primary);
+    }
+    
+    &.secondary {
+      background: rgba(139, 92, 246, 0.1);
+      
+      .icon {
+        color: var(--color-secondary);
+      }
+    }
+    
+    &.tertiary {
+      background: rgba(245, 158, 11, 0.1);
+      
+      .icon {
+        color: var(--color-warning);
+      }
+    }
+  }
+  
+  .archive-stat-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    
+    .stat-value {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--color-text);
+    }
+    
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--color-text-muted);
+    }
+  }
+  
+  .archive-title {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 16px;
+    background: linear-gradient(135deg, rgba(236, 72, 153, 0.1), rgba(139, 92, 246, 0.1));
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--color-text);
+    text-align: center;
+    
+    .icon {
+      width: 16px;
+      height: 16px;
+      color: var(--color-secondary);
+      flex-shrink: 0;
+    }
+  }
+}
+
+.view-full-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 14px 24px;
+  background: linear-gradient(135deg, var(--color-secondary), var(--color-accent));
+  color: white;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  
+  .icon {
+    width: 18px;
+    height: 18px;
+  }
+  
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 20px rgba(232, 180, 217, 0.35);
+  }
 }
 
 .prescription-entry {
@@ -1279,6 +1782,23 @@ onMounted(() => {
 .entry-icon {
   width: 16px;
   height: 16px;
+}
+
+.empty-action-btn {
+  margin-top: 16px;
+  padding: 10px 24px;
+  background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
+  color: white;
+  border: none;
+  border-radius: var(--radius-full);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  
+  &:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+  }
 }
 
 @media (max-width: 768px) {
