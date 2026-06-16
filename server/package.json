@@ -1,0 +1,35 @@
+{
+  "name": "dream-hotel-server",
+  "version": "1.0.0",
+  "description": "梦境旅馆 - 心情记录与剧情探索应用后端服务",
+  "main": "app.js",
+  "scripts": {
+    "start": "node app.js",
+    "dev": "nodemon app.js",
+    "init:db": "node src/models/init.js",
+    "seed:db": "node src/models/seed.js",
+    "setup": "node src/models/init.js && node src/models/seed.js"
+  },
+  "keywords": [
+    "koa",
+    "sqlite",
+    "dream-hotel",
+    "mood-tracker"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@koa/cors": "^5.0.0",
+    "bcryptjs": "^2.4.3",
+    "better-sqlite3": "^11.0.0",
+    "dotenv": "^16.4.5",
+    "jsonwebtoken": "^9.0.2",
+    "koa": "^2.15.3",
+    "koa-bodyparser": "^4.4.1",
+    "koa-jwt": "^4.0.4",
+    "koa-router": "^12.0.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.3"
+  }
+}
