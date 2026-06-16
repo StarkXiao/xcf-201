@@ -337,6 +337,72 @@ class TaskRepository {
     `);
     return stmt.get(userId).total;
   }
+
+  getCompletedTasksInDateRange(userId, startDate, endDate) {
+    const stmt = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM user_tasks
+      WHERE user_id = ? 
+        AND is_completed = 1 
+        AND completed_at IS NOT NULL
+        AND DATE(completed_at) BETWEEN ? AND ?
+    `);
+    return stmt.get(userId, startDate, endDate).count;
+  }
+
+  getClaimedTasksInDateRange(userId, startDate, endDate) {
+    const stmt = db.prepare(`
+      SELECT COUNT(*) as count
+      FROM user_tasks
+      WHERE user_id = ? 
+        AND is_claimed = 1 
+        AND claimed_at IS NOT NULL
+        AND DATE(claimed_at) BETWEEN ? AND ?
+    `);
+    return stmt.get(userId, startDate, endDate).count;
+  }
+
+  getRewardsEarnedInDateRange(userId, startDate, endDate) {
+    const stmt = db.prepare(`
+      SELECT COALESCE(SUM(t.reward), 0) as total
+      FROM user_tasks ut
+      JOIN tasks t ON ut.task_id = t.id
+      WHERE ut.user_id = ? 
+        AND ut.is_claimed = 1 
+        AND ut.claimed_at IS NOT NULL
+        AND DATE(ut.claimed_at) BETWEEN ? AND ?
+    `);
+    return stmt.get(userId, startDate, endDate).total;
+  }
+
+  getClaimDates(userId) {
+    const stmt = db.prepare(`
+      SELECT DISTINCT DATE(claimed_at) as claim_date
+      FROM user_tasks
+      WHERE user_id = ? AND is_claimed = 1 AND claimed_at IS NOT NULL
+      ORDER BY claim_date DESC
+    `);
+    return stmt.all(userId).map(r => r.claim_date);
+  }
+
+  getRecentCompletedTasks(userId, limit = 10) {
+    const stmt = db.prepare(`
+      SELECT 
+        t.id,
+        t.title,
+        t.type,
+        t.reward,
+        ut.completed_at,
+        ut.is_claimed,
+        ut.claimed_at
+      FROM user_tasks ut
+      JOIN tasks t ON ut.task_id = t.id
+      WHERE ut.user_id = ? AND ut.is_completed = 1
+      ORDER BY ut.completed_at DESC
+      LIMIT ?
+    `);
+    return stmt.all(userId, limit);
+  }
 }
 
 module.exports = new TaskRepository();

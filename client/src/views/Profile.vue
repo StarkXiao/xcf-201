@@ -2,11 +2,21 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { User, Calendar, Heart, DoorOpen, Trophy, LogOut, Moon, Sparkles, Target, Zap, Link, Star } from 'lucide-vue-next'
+import { useProfileStore } from '@/stores/profile'
+import { 
+  User, Calendar, Heart, DoorOpen, Trophy, LogOut, Moon, Sparkles, Target, Zap, Link, Star,
+  User as UserIcon, TrendingUp, BarChart3, Award, FileText
+} from 'lucide-vue-next'
 import NotificationToast from '@/components/NotificationToast.vue'
+import MoodCurveChart from '@/components/MoodCurveChart.vue'
+import RoomPreference from '@/components/RoomPreference.vue'
+import TaskCompletionStats from '@/components/TaskCompletionStats.vue'
+import AchievementTimeline from '@/components/AchievementTimeline.vue'
+import PeriodSummary from '@/components/PeriodSummary.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const profileStore = useProfileStore()
 
 const isLoading = ref(false)
 const showLogoutConfirm = ref(false)
@@ -14,8 +24,26 @@ const showToast = ref(false)
 const toastType = ref('success')
 const toastMessage = ref('')
 
+const activeMainTab = ref('basic')
+const activeGrowthTab = ref('summary')
+
+const mainTabs = [
+  { id: 'basic', label: '基本信息', icon: UserIcon },
+  { id: 'growth', label: '成长档案', icon: TrendingUp }
+]
+
+const growthTabs = [
+  { id: 'summary', label: '阶段总结', icon: FileText },
+  { id: 'mood', label: '情绪曲线', icon: Heart },
+  { id: 'rooms', label: '房间偏好', icon: DoorOpen },
+  { id: 'tasks', label: '任务完成', icon: Target },
+  { id: 'achievements', label: '成就节奏', icon: Award }
+]
+
 const user = computed(() => authStore.user)
 const profile = computed(() => authStore.user)
+const growthProfile = computed(() => profileStore.growthProfile)
+const profileLoading = computed(() => profileStore.isLoading)
 
 const joinDate = computed(() => {
   if (!profile.value?.createdAt) return ''
@@ -32,6 +60,17 @@ async function loadProfile() {
   isLoading.value = false
 }
 
+async function loadGrowthProfile() {
+  await profileStore.fetchGrowthProfile()
+}
+
+function switchMainTab(tabId) {
+  activeMainTab.value = tabId
+  if (tabId === 'growth' && !growthProfile.value) {
+    loadGrowthProfile()
+  }
+}
+
 function confirmLogout() {
   showLogoutConfirm.value = true
 }
@@ -42,6 +81,7 @@ function cancelLogout() {
 
 async function handleLogout() {
   authStore.logout()
+  profileStore.clearGrowthProfile()
   showLogoutConfirm.value = false
   toastType.value = 'success'
   toastMessage.value = '👋 期待与你在梦境中再次相遇'
@@ -65,12 +105,27 @@ onMounted(() => {
       </div>
     </div>
 
-    <div v-if="isLoading" class="loading-container">
+    <div class="tabs-container glass-card">
+      <div class="tabs-nav">
+        <button 
+          v-for="tab in mainTabs" 
+          :key="tab.id"
+          class="tab-btn"
+          :class="{ 'active': activeMainTab === tab.id }"
+          @click="switchMainTab(tab.id)"
+        >
+          <component :is="tab.icon" class="tab-icon" />
+          <span class="tab-label">{{ tab.label }}</span>
+        </button>
+      </div>
+    </div>
+
+    <div v-if="isLoading && activeMainTab === 'basic'" class="loading-container">
       <div class="loading-spinner"></div>
       <p class="loading-text">加载中...</p>
     </div>
 
-    <div v-else>
+    <div v-else-if="activeMainTab === 'basic'">
       <div class="profile-header glass-card">
         <div class="avatar-section">
           <div class="avatar-wrapper">
@@ -214,6 +269,66 @@ onMounted(() => {
       </div>
     </div>
 
+    <div v-else-if="activeMainTab === 'growth'">
+      <div v-if="profileLoading" class="loading-container">
+        <div class="loading-spinner"></div>
+        <p class="loading-text">正在生成成长档案...</p>
+      </div>
+
+      <div v-else-if="growthProfile">
+        <div class="growth-tabs glass-card">
+          <div class="growth-tabs-nav">
+            <button 
+              v-for="tab in growthTabs" 
+              :key="tab.id"
+              class="growth-tab-btn"
+              :class="{ 'active': activeGrowthTab === tab.id }"
+              @click="activeGrowthTab = tab.id"
+            >
+              <component :is="tab.icon" class="growth-tab-icon" />
+              <span class="growth-tab-label">{{ tab.label }}</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="growth-content">
+          <Transition name="fade" mode="out-in">
+            <PeriodSummary 
+              v-if="activeGrowthTab === 'summary'" 
+              :periodSummary="growthProfile.periodSummary" 
+              :key="'summary'"
+            />
+            <MoodCurveChart 
+              v-else-if="activeGrowthTab === 'mood'" 
+              :moodCurve="growthProfile.moodCurve" 
+              :key="'mood'"
+            />
+            <RoomPreference 
+              v-else-if="activeGrowthTab === 'rooms'" 
+              :roomPreference="growthProfile.roomPreference" 
+              :key="'rooms'"
+            />
+            <TaskCompletionStats 
+              v-else-if="activeGrowthTab === 'tasks'" 
+              :taskCompletion="growthProfile.taskCompletion" 
+              :key="'tasks'"
+            />
+            <AchievementTimeline 
+              v-else-if="activeGrowthTab === 'achievements'" 
+              :achievementRhythm="growthProfile.achievementRhythm" 
+              :key="'achievements'"
+            />
+          </Transition>
+        </div>
+      </div>
+
+      <div v-else class="empty-state glass-card">
+        <Sparkles class="empty-icon" />
+        <p class="empty-title">暂无成长数据</p>
+        <p class="empty-desc">继续使用应用，记录心情、阅读故事，即可生成专属成长档案</p>
+      </div>
+    </div>
+
     <div v-if="showLogoutConfirm" class="modal-overlay" @click.self="cancelLogout">
       <div class="modal-content glass-card">
         <div class="modal-icon">
@@ -254,6 +369,53 @@ onMounted(() => {
 .page-subtitle {
   color: var(--color-text-muted);
   font-size: 0.95rem;
+}
+
+.tabs-container {
+  padding: 8px;
+  margin-bottom: 24px;
+}
+
+.tabs-nav {
+  display: flex;
+  gap: 8px;
+}
+
+.tab-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-secondary);
+  }
+  
+  &.active {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(236, 72, 153, 0.2));
+    color: var(--color-text);
+    box-shadow: 0 2px 10px rgba(139, 92, 246, 0.2);
+  }
+}
+
+.tab-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.tab-label {
+  font-family: var(--font-display);
 }
 
 .loading-container {
@@ -586,6 +748,90 @@ onMounted(() => {
   text-align: right;
 }
 
+.growth-tabs {
+  padding: 8px;
+  margin-bottom: 20px;
+}
+
+.growth-tabs-nav {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.growth-tab-btn {
+  flex: 1;
+  min-width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: none;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  
+  &:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--color-text-secondary);
+  }
+  
+  &.active {
+    background: linear-gradient(135deg, rgba(236, 72, 153, 0.2), rgba(139, 92, 246, 0.2));
+    color: var(--color-text);
+  }
+}
+
+.growth-tab-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.growth-tab-label {
+  font-family: var(--font-display);
+}
+
+.growth-content {
+  min-height: 400px;
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60px 20px;
+  text-align: center;
+}
+
+.empty-icon {
+  width: 64px;
+  height: 64px;
+  color: var(--color-secondary);
+  margin-bottom: 16px;
+  opacity: 0.6;
+}
+
+.empty-title {
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin-bottom: 8px;
+  font-family: var(--font-display);
+}
+
+.empty-desc {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  max-width: 360px;
+  margin: 0;
+}
+
 .modal-overlay {
   position: fixed;
   inset: 0;
@@ -658,6 +904,21 @@ onMounted(() => {
   padding: 12px 20px;
 }
 
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.3s ease, transform 0.3s ease;
+}
+
+.fade-enter-from {
+  opacity: 0;
+  transform: translateY(10px);
+}
+
+.fade-leave-to {
+  opacity: 0;
+  transform: translateY(-10px);
+}
+
 @media (max-width: 768px) {
   .profile-header {
     flex-direction: column;
@@ -680,6 +941,19 @@ onMounted(() => {
 
   .modal-actions {
     flex-direction: column;
+  }
+  
+  .tabs-nav {
+    flex-direction: column;
+  }
+  
+  .growth-tabs-nav {
+    flex-wrap: wrap;
+  }
+  
+  .growth-tab-btn {
+    flex: 1 1 calc(50% - 6px);
+    min-width: auto;
   }
 }
 </style>

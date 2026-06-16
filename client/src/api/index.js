@@ -69,4 +69,8 @@ export const achievementApi = {
   getReminders: () => api.get('/reminders')
 }
 
+export const profileApi = {
+  getGrowthProfile: () => api.get('/profile/growth')
+}
+
 export default api

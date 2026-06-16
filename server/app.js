@@ -42,7 +42,8 @@ router.get('/', async (ctx) => {
       moods: '/api/moods/*',
       rooms: '/api/rooms/*',
       tasks: '/api/tasks/*',
-      achievements: '/api/achievements/*'
+      achievements: '/api/achievements/*',
+      profile: '/api/profile/*'
     }
   };
 });
