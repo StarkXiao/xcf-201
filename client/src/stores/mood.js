@@ -74,6 +74,18 @@ export const useMoodStore = defineStore('mood', () => {
     }
   }
 
+  async function fetchStreakStatus() {
+    try {
+      const response = await moodApi.getStreakStatus()
+      if (response.code === 200) {
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || '获取连续记录状态失败' }
+    }
+  }
+
   function getAggregateByDate(date) {
     return aggregates.value.find(a => a.record_date === date)
   }
@@ -106,6 +118,7 @@ export const useMoodStore = defineStore('mood', () => {
     fetchMoodByDate,
     createMood,
     deleteMood,
+    fetchStreakStatus,
     getAggregateByDate,
     getDominantMood,
     getSegmentCount

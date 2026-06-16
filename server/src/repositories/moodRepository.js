@@ -422,6 +422,28 @@ class MoodRepository {
   getBackfillDays() {
     return BACKFILL_DAYS;
   }
+
+  getLastRecordDate(userId) {
+    const stmt = db.prepare(`
+      SELECT DISTINCT record_date
+      FROM moods
+      WHERE user_id = ?
+      ORDER BY record_date DESC
+      LIMIT 1
+    `);
+    const result = stmt.get(userId);
+    return result ? result.record_date : null;
+  }
+
+  getUniqueDates(userId) {
+    const stmt = db.prepare(`
+      SELECT DISTINCT record_date
+      FROM moods
+      WHERE user_id = ?
+      ORDER BY record_date DESC
+    `);
+    return stmt.all(userId);
+  }
 }
 
 module.exports = new MoodRepository();

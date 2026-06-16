@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, watch } from 'vue'
 import { useAchievementStore } from '@/stores/achievement'
+import { useNotificationStore } from '@/stores/notification'
 import { useRouter } from 'vue-router'
 import { 
   Trophy, Target, Gift, CheckCircle, Clock, Star, 
@@ -8,17 +9,14 @@ import {
   Moon, Zap, Layers, BookOpen, Heart, Award, ExternalLink,
   Home, Smile
 } from 'lucide-vue-next'
-import NotificationToast from '@/components/NotificationToast.vue'
 
 const achievementStore = useAchievementStore()
+const notificationStore = useNotificationStore()
 const router = useRouter()
 
 const activeTab = ref('tasks')
 const activeTaskTab = ref('daily')
 const activeAchievementTab = ref('all')
-const showToast = ref(false)
-const toastType = ref('success')
-const toastMessage = ref('')
 const isLoading = ref(false)
 const claimingId = ref(null)
 const showReminderPanel = ref(false)
@@ -112,15 +110,14 @@ async function claimReward(taskId) {
   claimingId.value = null
   
   if (result.success) {
-    toastType.value = 'success'
-    toastMessage.value = `🎉 领取成功！获得 ${result.data.reward} 星币`
-    showToast.value = true
+    notificationStore.success(
+      `🎉 领取成功！获得 ${result.data.reward} 星币`,
+      '奖励领取成功'
+    )
     await achievementStore.fetchTasks()
     await achievementStore.fetchAchievements()
   } else {
-    toastType.value = 'error'
-    toastMessage.value = result.message
-    showToast.value = true
+    notificationStore.error(result.message, '领取失败')
   }
 }
 
@@ -174,9 +171,7 @@ const highPriorityReminderCount = computed(() =>
 )
 
 function showTaskCompleteToast(task) {
-  toastType.value = 'success'
-  toastMessage.value = `🎯 「${task.title}」任务完成！奖励 ${task.reward} 星币待领取`
-  showToast.value = true
+  notificationStore.taskClaimable(task)
 }
 
 onMounted(() => {
@@ -786,13 +781,6 @@ onMounted(() => {
         </div>
       </div>
     </div>
-    
-    <NotificationToast
-      :show="showToast"
-      :type="toastType"
-      :message="toastMessage"
-      @close="showToast = false"
-    />
   </div>
 </template>
 

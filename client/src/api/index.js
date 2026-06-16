@@ -44,7 +44,8 @@ export const moodApi = {
   createMood: (data) => api.post('/moods', data),
   getMoods: (year, month) => api.get('/moods', { params: { year, month } }),
   getMoodByDate: (date) => api.get(`/moods/${date}`),
-  deleteMood: (date, timeSegment) => api.delete(`/moods/${date}`, { data: { timeSegment } })
+  deleteMood: (date, timeSegment) => api.delete(`/moods/${date}`, { data: { timeSegment } }),
+  getStreakStatus: () => api.get('/moods/streak/status')
 }
 
 export const retrospectiveApi = {

@@ -1,23 +1,21 @@
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useMoodStore } from '@/stores/mood'
 import { useAchievementStore } from '@/stores/achievement'
 import { useRetrospectiveStore } from '@/stores/retrospective'
+import { useNotificationStore } from '@/stores/notification'
 import { ChevronLeft, ChevronRight, Plus, Flame, BarChart3, Layers, Target, Gift, BookOpen, Sparkles, RefreshCw } from 'lucide-vue-next'
 import MoodModal from '@/components/MoodModal.vue'
-import NotificationToast from '@/components/NotificationToast.vue'
 
 const moodStore = useMoodStore()
 const achievementStore = useAchievementStore()
 const retrospectiveStore = useRetrospectiveStore()
+const notificationStore = useNotificationStore()
 
 const currentDate = ref(new Date())
 const showModal = ref(false)
 const selectedDate = ref('')
 const existingMood = ref(null)
-const showToast = ref(false)
-const toastType = ref('success')
-const toastMessage = ref('')
 const isLoading = ref(false)
 
 const moodColors = {
@@ -131,42 +129,8 @@ async function handleSubmit(moodData) {
   isLoading.value = false
   
   if (result.success) {
-    toastType.value = 'success'
-    
-    const segments = result.data.dayAggregate?.segments || []
-    const mainSegments = segments.filter(s => ['morning', 'afternoon', 'evening'].includes(s.time_segment))
-    
-    if (mainSegments.length >= 3) {
-      toastMessage.value = '🎉 完成今日三段心情记录！'
-    } else {
-      toastMessage.value = `心情记录成功！已记录 ${mainSegments.length}/3 时段`
-    }
-    
-    showToast.value = true
-    
-    if (result.data.newlyUnlockedRooms?.length > 0) {
-      setTimeout(() => {
-        toastType.value = 'success'
-        toastMessage.value = `🎉 解锁了新房间：${result.data.newlyUnlockedRooms.map(r => r.name).join('、')}！`
-        showToast.value = true
-      }, 2000)
-    }
-    
-    if (result.data.newlyUnlockedAchievements?.length > 0) {
-      setTimeout(() => {
-        toastType.value = 'success'
-        toastMessage.value = `🏆 获得新成就：${result.data.newlyUnlockedAchievements.map(a => a.name).join('、')}！`
-        showToast.value = true
-      }, 4000)
-    }
-    
-    if (result.data.newlyCompletedTasks?.length > 0) {
-      setTimeout(() => {
-        toastType.value = 'success'
-        const taskNames = result.data.newlyCompletedTasks.map(t => t.title).join('、')
-        toastMessage.value = `🎯 完成任务：${taskNames}！快去领取奖励吧~`
-        showToast.value = true
-      }, 6000)
+    if (result.data.notificationEvents && result.data.notificationEvents.length > 0) {
+      notificationStore.push(result.data.notificationEvents)
     }
     
     achievementStore.fetchTasks()
@@ -178,9 +142,7 @@ async function handleSubmit(moodData) {
     existingMood.value = await moodStore.fetchMoodByDate(moodData.date)
     existingMood.value = existingMood.value.data
   } else {
-    toastType.value = 'error'
-    toastMessage.value = result.message
-    showToast.value = true
+    notificationStore.error(result.message)
   }
 }
 
@@ -188,9 +150,7 @@ async function handleDelete(deleteData) {
   const result = await moodStore.deleteMood(deleteData.date, deleteData.timeSegment)
   
   if (result.success) {
-    toastType.value = 'success'
-    toastMessage.value = '已删除该时段的心情记录'
-    showToast.value = true
+    notificationStore.success('已删除该时段的心情记录')
     
     loadMoods()
     
@@ -200,9 +160,7 @@ async function handleDelete(deleteData) {
 }
 
 async function handleRetrospectiveCreated(data) {
-  toastType.value = 'success'
-  toastMessage.value = '回顾已保存'
-  showToast.value = true
+  notificationStore.success('回顾已保存')
   
   await retrospectiveStore.fetchMonthRetrospectives(currentYear.value, currentMonth.value)
 }
@@ -392,13 +350,6 @@ onMounted(async () => {
       @submit="handleSubmit"
       @delete="handleDelete"
       @retrospective-created="handleRetrospectiveCreated"
-    />
-    
-    <NotificationToast
-      :show="showToast"
-      :type="toastType"
-      :message="toastMessage"
-      @close="showToast = false"
     />
   </div>
 </template>

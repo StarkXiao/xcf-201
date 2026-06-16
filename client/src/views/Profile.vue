@@ -2,12 +2,12 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationStore } from '@/stores/notification'
 import { useProfileStore } from '@/stores/profile'
 import { 
   User, Calendar, Heart, DoorOpen, Trophy, LogOut, Moon, Sparkles, Target, Zap, Link, Star,
   User as UserIcon, TrendingUp, BarChart3, Award, FileText
 } from 'lucide-vue-next'
-import NotificationToast from '@/components/NotificationToast.vue'
 import MoodCurveChart from '@/components/MoodCurveChart.vue'
 import RoomPreference from '@/components/RoomPreference.vue'
 import TaskCompletionStats from '@/components/TaskCompletionStats.vue'
@@ -16,13 +16,11 @@ import PeriodSummary from '@/components/PeriodSummary.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const notificationStore = useNotificationStore()
 const profileStore = useProfileStore()
 
 const isLoading = ref(false)
 const showLogoutConfirm = ref(false)
-const showToast = ref(false)
-const toastType = ref('success')
-const toastMessage = ref('')
 
 const activeMainTab = ref('basic')
 const activeGrowthTab = ref('summary')
@@ -83,9 +81,7 @@ async function handleLogout() {
   authStore.logout()
   profileStore.clearGrowthProfile()
   showLogoutConfirm.value = false
-  toastType.value = 'success'
-  toastMessage.value = '👋 期待与你在梦境中再次相遇'
-  showToast.value = true
+  notificationStore.success('👋 期待与你在梦境中再次相遇', '已退出登录')
   setTimeout(() => {
     router.push('/login')
   }, 1500)
@@ -342,13 +338,6 @@ onMounted(() => {
         </div>
       </div>
     </div>
-
-    <NotificationToast
-      :show="showToast"
-      :type="toastType"
-      :message="toastMessage"
-      @close="showToast = false"
-    />
   </div>
 </template>
 

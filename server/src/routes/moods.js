@@ -13,6 +13,18 @@ router.get('/config', async (ctx) => {
   };
 });
 
+router.get('/streak/status', async (ctx) => {
+  const user = getCurrentUser(ctx);
+  
+  const result = moodService.checkStreakStatus(user.userId);
+  
+  ctx.body = {
+    code: 200,
+    message: 'success',
+    data: result
+  };
+});
+
 router.post('/', async (ctx) => {
   const user = getCurrentUser(ctx);
   const { date, timeSegment, moodType, content, tags, tagWeights } = ctx.request.body;

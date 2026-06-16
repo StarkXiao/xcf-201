@@ -3,25 +3,23 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/room'
 import { useAchievementStore } from '@/stores/achievement'
+import { useNotificationStore } from '@/stores/notification'
 import { 
   ArrowLeft, ChevronLeft, ChevronRight, BookOpen, Bookmark, 
   GitBranch, Clock, History, X, Lock, Check, Sparkles 
 } from 'lucide-vue-next'
-import NotificationToast from '@/components/NotificationToast.vue'
 
 const route = useRoute()
 const router = useRouter()
 const roomStore = useRoomStore()
 const achievementStore = useAchievementStore()
+const notificationStore = useNotificationStore()
 
 const roomId = computed(() => parseInt(route.params.id))
 const currentChapterIndex = ref(0)
 const isLoading = ref(false)
 const isReading = ref(false)
 const displayedText = ref('')
-const showToast = ref(false)
-const toastType = ref('success')
-const toastMessage = ref('')
 
 const showBranchSelector = ref(false)
 const showHistoryPanel = ref(false)
@@ -143,10 +141,8 @@ function nextChapter() {
     currentChapterIndex.value++
     startReading()
   } else {
-      toastType.value = 'success'
-      toastMessage.value = '🎉 恭喜你已读完这条故事线！'
-      showToast.value = true
-    }
+    notificationStore.success('🎉 恭喜你已读完这条故事线！', '故事线完成')
+  }
 }
 
 function goBack() {
@@ -161,9 +157,7 @@ async function switchBranch(branchKey) {
   
   const branch = branches.value.find(b => b.branch_key === branchKey)
   if (!branch?.isAvailable && !branch?.isUnlocked) {
-    toastType.value = 'error'
-    toastMessage.value = '🔒 暂不满足这条故事线的解锁条件'
-    showToast.value = true
+    notificationStore.warning('🔒 暂不满足这条故事线的解锁条件', '无法切换')
     return
   }
   
@@ -178,9 +172,7 @@ async function switchBranch(branchKey) {
     if (result.success) {
       await loadRoom(branchKey)
     } else {
-      toastType.value = 'error'
-      toastMessage.value = result.message
-      showToast.value = true
+      notificationStore.error(result.message, '切换失败')
     }
   }
   
@@ -190,9 +182,7 @@ async function switchBranch(branchKey) {
 async function selectBranchChoice(branchKey) {
   const choice = branchChoices.value.find(c => c.branch_key === branchKey)
   if (!choice?.isAvailable) {
-    toastType.value = 'error'
-    toastMessage.value = '🔒 暂不满足进入这条故事线的条件'
-    showToast.value = true
+    notificationStore.warning('🔒 暂不满足进入这条故事线的条件', '无法进入')
     return
   }
   
@@ -219,9 +209,7 @@ async function jumpToHistory(storyId) {
       isReading.value = false
     }
   } else {
-    toastType.value = 'error'
-    toastMessage.value = result.message
-    showToast.value = true
+    notificationStore.error(result.message, '跳转失败')
   }
   
   isLoading.value = false
@@ -480,13 +468,6 @@ onMounted(() => {
         </div>
       </div>
     </div>
-    
-    <NotificationToast
-      :show="showToast"
-      :type="toastType"
-      :message="toastMessage"
-      @close="showToast = false"
-    />
   </div>
 </template>
 

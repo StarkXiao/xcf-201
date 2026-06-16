@@ -2,15 +2,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/room'
+import { useNotificationStore } from '@/stores/notification'
 import { Lock, Unlock, ChevronRight, DoorOpen, Calendar, BookOpen, Heart, CheckCircle, Target, Sparkles } from 'lucide-vue-next'
-import NotificationToast from '@/components/NotificationToast.vue'
 
 const router = useRouter()
 const roomStore = useRoomStore()
+const notificationStore = useNotificationStore()
 
-const showToast = ref(false)
-const toastType = ref('success')
-const toastMessage = ref('')
 const isLoading = ref(false)
 const unlockingRoomId = ref(null)
 
@@ -89,9 +87,10 @@ function showUnlockConditionsToast(room) {
   const unmet = getUnmetConditions(room)
   const messages = unmet.map(c => `• ${getConditionLabel(c.key)}: ${c.current} / ${c.target}`)
   
-  toastType.value = 'warning'
-  toastMessage.value = `解锁「${room.name}」还需要：\n${messages.join('\n')}`
-  showToast.value = true
+  notificationStore.warning(
+    `解锁「${room.name}」还需要：\n${messages.join('\n')}`,
+    '解锁条件未满足'
+  )
 }
 
 async function tryUnlockRoom(room) {
@@ -102,16 +101,17 @@ async function tryUnlockRoom(room) {
   unlockingRoomId.value = null
   
   if (result.success) {
-    toastType.value = 'success'
-    toastMessage.value = `🎉 「${room.name}」解锁成功！`
-    showToast.value = true
+    if (result.data?.notificationEvents && result.data.notificationEvents.length > 0) {
+      notificationStore.push(result.data.notificationEvents)
+    } else {
+      notificationStore.roomUnlocked(room)
+    }
     await loadRooms()
   } else {
-    toastType.value = 'error'
-    toastMessage.value = result.details?.length 
+    const message = result.details?.length 
       ? `解锁失败：\n${result.details.join('\n')}`
       : result.message || '解锁失败'
-    showToast.value = true
+    notificationStore.error(message, '解锁失败')
   }
 }
 
@@ -248,13 +248,6 @@ onMounted(() => {
         </div>
       </div>
     </div>
-    
-    <NotificationToast
-      :show="showToast"
-      :type="toastType"
-      :message="toastMessage"
-      @close="showToast = false"
-    />
   </div>
 </template>
 

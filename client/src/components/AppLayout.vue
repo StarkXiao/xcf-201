@@ -1,12 +1,19 @@
 <script setup>
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
-import { computed } from 'vue'
+import { useNotificationStore } from '@/stores/notification'
+import { useMoodStore } from '@/stores/mood'
+import { useAchievementStore } from '@/stores/achievement'
+import { computed, onMounted, watch } from 'vue'
 import { Calendar, DoorOpen, Trophy, User, LogOut, Moon } from 'lucide-vue-next'
+import NotificationToast from './NotificationToast.vue'
 
 const route = useRoute()
 const router = useRouter()
 const authStore = useAuthStore()
+const notificationStore = useNotificationStore()
+const moodStore = useMoodStore()
+const achievementStore = useAchievementStore()
 
 const navItems = [
   { path: '/calendar', name: '心情日历', icon: Calendar },
@@ -19,11 +26,52 @@ const isActive = (path) => route.path === path
 
 const handleLogout = () => {
   authStore.logout()
+  notificationStore.clearAll()
   router.push('/login')
 }
 
 const showNav = computed(() => {
   return !['/login', '/register'].includes(route.path)
+})
+
+async function checkStreakAndReminders() {
+  if (!authStore.isAuthenticated) return
+
+  try {
+    const streakResult = await moodStore.fetchStreakStatus()
+    if (streakResult.success && streakResult.data) {
+      if (streakResult.data.notificationEvents && streakResult.data.notificationEvents.length > 0) {
+        notificationStore.push(streakResult.data.notificationEvents)
+      }
+    }
+  } catch (e) {
+    // ignore error
+  }
+
+  try {
+    const remindersResult = await achievementStore.fetchReminders()
+    if (remindersResult.success && remindersResult.data) {
+      remindersResult.data.forEach(reminder => {
+        if (reminder.event) {
+          notificationStore.addNotification(reminder.event)
+        }
+      })
+    }
+  } catch (e) {
+    // ignore error
+  }
+}
+
+onMounted(() => {
+  if (authStore.isAuthenticated) {
+    checkStreakAndReminders()
+  }
+})
+
+watch(() => authStore.isAuthenticated, (isAuth) => {
+  if (isAuth) {
+    setTimeout(checkStreakAndReminders, 500)
+  }
 })
 </script>
 
@@ -67,6 +115,7 @@ const showNav = computed(() => {
         <span class="mobile-nav-text">{{ item.name }}</span>
       </router-link>
     </nav>
+    <NotificationToast />
   </div>
 </template>
 

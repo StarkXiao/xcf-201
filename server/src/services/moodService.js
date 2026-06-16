@@ -4,6 +4,7 @@ const roomRepository = require('../repositories/roomRepository');
 const achievementRepository = require('../repositories/achievementRepository');
 const achievementService = require('./achievementService');
 const roomService = require('./roomService');
+const notificationEvents = require('../utils/notificationEvents');
 
 const VALID_MOOD_TYPES = ['happy', 'calm', 'sad', 'anxious', 'angry'];
 const VALID_SEGMENTS = ['morning', 'afternoon', 'evening', 'day'];
@@ -45,6 +46,8 @@ class MoodService {
         }
       }
     }
+    
+    const prevStreakDays = moodRepository.getStreakDays(userId);
     
     const mood = moodRepository.create(userId, date, timeSegment, moodType, content, tags, tagWeights);
     
@@ -123,13 +126,52 @@ class MoodService {
 
     const recordDate = new Date(date);
     
-    return {
+    const result = {
       mood,
       dayAggregate: moodRepository.getDayAggregate(userId, date),
       newlyUnlockedAchievements: newlyUnlockedAchievements.filter(a => a),
       newlyUnlockedRooms: unlockedRooms,
       newlyCompletedTasks: taskUpdates,
       stats: moodRepository.getStats(userId, recordDate.getFullYear(), recordDate.getMonth() + 1)
+    };
+    
+    result.notificationEvents = notificationEvents.createBatchEventsFromMoodResult(result);
+    
+    if (streakDays > prevStreakDays && streakDays >= 2) {
+      result.notificationEvents.push(notificationEvents.createStreakContinuedEvent(streakDays));
+    }
+    
+    return result;
+  }
+
+  checkStreakStatus(userId) {
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+    
+    const todayMoods = moodRepository.findByDate(userId, todayStr);
+    const yesterdayMoods = moodRepository.findByDate(userId, yesterdayStr);
+    
+    const currentStreak = moodRepository.getStreakDays(userId);
+    const hasTodayRecord = todayMoods.length > 0;
+    const hasYesterdayRecord = yesterdayMoods.length > 0;
+    
+    const events = [];
+    
+    if (!hasTodayRecord && !hasYesterdayRecord && currentStreak > 0) {
+      const lastRecordDate = moodRepository.getLastRecordDate(userId);
+      events.push(notificationEvents.createStreakBrokenEvent(currentStreak, lastRecordDate));
+    }
+    
+    return {
+      currentStreak,
+      hasTodayRecord,
+      hasYesterdayRecord,
+      isBroken: !hasTodayRecord && !hasYesterdayRecord && currentStreak > 0,
+      notificationEvents: events
     };
   }
 

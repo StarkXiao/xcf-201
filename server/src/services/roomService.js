@@ -4,6 +4,7 @@ const achievementRepository = require('../repositories/achievementRepository');
 const taskRepository = require('../repositories/taskRepository');
 const achievementService = require('./achievementService');
 const moodRepository = require('../repositories/moodRepository');
+const notificationEvents = require('../utils/notificationEvents');
 
 class RoomService {
   getRoomList(userId) {
@@ -223,7 +224,7 @@ class RoomService {
     }
     
     if (room.is_unlocked) {
-      return { success: false, message: '房间已解锁' };
+      return { success: false, message: '房间已解锁', notificationEvents: [] };
     }
     
     const checkResult = this.checkRoomUnlockConditions(userId, room);
@@ -234,21 +235,37 @@ class RoomService {
         success: false,
         message: '解锁条件未满足',
         details: failedMessages,
-        progress: checkResult.progress
+        progress: checkResult.progress,
+        notificationEvents: []
       };
     }
     
     const result = roomRepository.unlockRoom(userId, roomId);
+    
+    const events = [];
     
     if (result.success) {
       roomRepository.ensureBranchProgress(userId, roomId, 'main');
       roomRepository.setActiveBranch(userId, roomId, 'main');
       
       const unlockedCount = roomRepository.getUnlockedCount(userId);
-      achievementRepository.checkAndUnlock(userId, 'rooms_unlocked', unlockedCount);
+      const newlyUnlockedAchievements = achievementRepository.checkAndUnlock(userId, 'rooms_unlocked', unlockedCount);
+      
+      events.push(notificationEvents.createRoomUnlockedEvent(room));
+      
+      if (newlyUnlockedAchievements && newlyUnlockedAchievements.length > 0) {
+        newlyUnlockedAchievements.forEach(achievement => {
+          if (achievement) {
+            events.push(notificationEvents.createAchievementUnlockedEvent(achievement));
+          }
+        });
+      }
     }
     
-    return result;
+    return {
+      ...result,
+      notificationEvents: events
+    };
   }
 
   getFailedConditionMessages(failedConditions, progress) {

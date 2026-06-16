@@ -2,19 +2,18 @@
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationStore } from '@/stores/notification'
 import { Moon, User, Lock, ArrowRight } from 'lucide-vue-next'
 import NotificationToast from '@/components/NotificationToast.vue'
 
 const router = useRouter()
 const route = useRoute()
 const authStore = useAuthStore()
+const notificationStore = useNotificationStore()
 
 const username = ref('')
 const password = ref('')
 const isLoading = ref(false)
-const showToast = ref(false)
-const toastType = ref('success')
-const toastMessage = ref('')
 
 const canSubmit = () => username.value.trim() && password.value.trim()
 
@@ -31,16 +30,12 @@ const handleLogin = async () => {
   isLoading.value = false
   
   if (result.success) {
-    toastType.value = 'success'
-    toastMessage.value = '登录成功！欢迎回到梦境旅馆'
-    showToast.value = true
+    notificationStore.success('登录成功！欢迎回到梦境旅馆', '欢迎回来')
     
     const redirect = route.query.redirect || '/calendar'
     setTimeout(() => router.push(redirect), 500)
   } else {
-    toastType.value = 'error'
-    toastMessage.value = result.message
-    showToast.value = true
+    notificationStore.error(result.message, '登录失败')
   }
 }
 
@@ -115,12 +110,7 @@ const handleKeyPress = (e) => {
       </div>
     </div>
     
-    <NotificationToast
-      :show="showToast"
-      :type="toastType"
-      :message="toastMessage"
-      @close="showToast = false"
-    />
+    <NotificationToast />
   </div>
 </template>
 

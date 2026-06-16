@@ -2,20 +2,19 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
+import { useNotificationStore } from '@/stores/notification'
 import { Moon, User, Mail, Lock, ArrowRight } from 'lucide-vue-next'
 import NotificationToast from '@/components/NotificationToast.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
+const notificationStore = useNotificationStore()
 
 const username = ref('')
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const isLoading = ref(false)
-const showToast = ref(false)
-const toastType = ref('success')
-const toastMessage = ref('')
 
 const canSubmit = () => {
   return username.value.trim() && 
@@ -34,16 +33,12 @@ const handleRegister = async () => {
   if (!canSubmit() || isLoading.value) return
   
   if (password.value.length < 6) {
-    toastType.value = 'error'
-    toastMessage.value = '密码长度不能少于 6 个字符'
-    showToast.value = true
+    notificationStore.warning('密码长度不能少于 6 个字符', '输入不合法')
     return
   }
   
   if (!validateEmail(email.value)) {
-    toastType.value = 'error'
-    toastMessage.value = '邮箱格式不正确'
-    showToast.value = true
+    notificationStore.warning('邮箱格式不正确', '输入不合法')
     return
   }
   
@@ -58,15 +53,11 @@ const handleRegister = async () => {
   isLoading.value = false
   
   if (result.success) {
-    toastType.value = 'success'
-    toastMessage.value = '注册成功！欢迎入住梦境旅馆'
-    showToast.value = true
+    notificationStore.success('注册成功！欢迎入住梦境旅馆', '欢迎加入')
     
     setTimeout(() => router.push('/calendar'), 500)
   } else {
-    toastType.value = 'error'
-    toastMessage.value = result.message
-    showToast.value = true
+    notificationStore.error(result.message, '注册失败')
   }
 }
 
@@ -173,12 +164,7 @@ const handleKeyPress = (e) => {
       </div>
     </div>
     
-    <NotificationToast
-      :show="showToast"
-      :type="toastType"
-      :message="toastMessage"
-      @close="showToast = false"
-    />
+    <NotificationToast />
   </div>
 </template>
 

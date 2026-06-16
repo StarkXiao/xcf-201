@@ -1,6 +1,8 @@
 const taskRepository = require('../repositories/taskRepository');
 const achievementRepository = require('../repositories/achievementRepository');
 const userRepository = require('../repositories/userRepository');
+const moodRepository = require('../repositories/moodRepository');
+const notificationEvents = require('../utils/notificationEvents');
 
 class AchievementService {
   getTasks(userId) {
@@ -526,8 +528,54 @@ class AchievementService {
     const today = new Date();
     const reminders = [];
     
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const yesterdayStr = `${yesterday.getFullYear()}-${String(yesterday.getMonth() + 1).padStart(2, '0')}-${String(yesterday.getDate()).padStart(2, '0')}`;
+    
+    const todayMoods = moodRepository.findByDate(userId, todayStr);
+    const yesterdayMoods = moodRepository.findByDate(userId, yesterdayStr);
+    const currentStreak = moodRepository.getStreakDays(userId);
+    
+    if (todayMoods.length === 0 && yesterdayMoods.length === 0 && currentStreak > 0) {
+      const lastRecordDate = moodRepository.getLastRecordDate(userId);
+      reminders.push({
+        type: 'streak_broken',
+        title: '连续记录中断',
+        message: '🔥 连续记录已中断，昨天忘记记录了。今天重新开始吧！',
+        currentStreak,
+        lastRecordDate,
+        priority: 'high',
+        event: notificationEvents.createStreakBrokenEvent(currentStreak, lastRecordDate)
+      });
+    } else if (todayMoods.length === 0 && currentStreak > 0) {
+      reminders.push({
+        type: 'streak_reminder',
+        title: '保持连续记录',
+        message: `🔥 已连续记录 ${currentStreak} 天，别忘了今天的心情记录哦！`,
+        currentStreak,
+        priority: 'normal'
+      });
+    }
+    
     const dailyTasks = taskRepository.getUserDailyTasks(userId, today);
     const uncompletedDaily = dailyTasks.filter(t => !t.is_completed);
+    const claimableDaily = dailyTasks.filter(t => t.is_completed && !t.is_claimed);
+    
+    if (claimableDaily.length > 0) {
+      reminders.push({
+        type: 'task_claimable',
+        title: claimableDaily.length > 1 ? `${claimableDaily.length} 个任务可领取` : '任务可领取',
+        message: claimableDaily.length > 1
+          ? `✨ 有 ${claimableDaily.length} 个每日任务奖励待领取！`
+          : `✨ 「${claimableDaily[0].title}」的奖励可以领取了！`,
+        count: claimableDaily.length,
+        tasks: claimableDaily,
+        priority: 'normal',
+        event: notificationEvents.createTaskClaimableEvent(claimableDaily)
+      });
+    }
     
     if (uncompletedDaily.length > 0) {
       reminders.push({
@@ -541,6 +589,18 @@ class AchievementService {
     
     const weeklyTasks = taskRepository.getUserWeeklyTasks(userId, today);
     const uncompletedWeekly = weeklyTasks.filter(t => !t.is_completed);
+    const claimableWeekly = weeklyTasks.filter(t => t.is_completed && !t.is_claimed);
+    
+    if (claimableWeekly.length > 0) {
+      reminders.push({
+        type: 'task_claimable',
+        title: `${claimableWeekly.length} 个周任务可领取`,
+        message: `✨ 有 ${claimableWeekly.length} 个周任务奖励待领取！`,
+        count: claimableWeekly.length,
+        tasks: claimableWeekly,
+        priority: 'low'
+      });
+    }
     
     if (uncompletedWeekly.length > 0) {
       reminders.push({
