@@ -1,5 +1,6 @@
 const Router = require('koa-router');
 const dreamCollectionService = require('../services/dreamCollectionService');
+const dreamCollectionRepository = require('../repositories/dreamCollectionRepository');
 const { getCurrentUser } = require('../middleware/auth');
 
 const router = new Router({ prefix: '/api' });
@@ -61,20 +62,22 @@ router.put('/dream-collection/fragments/:id', async (ctx) => {
   const fragmentId = parseInt(ctx.params.id);
   const data = ctx.request.body;
 
+  const existing = dreamCollectionRepository.getEmotionFragmentById(fragmentId);
+  if (!existing) {
+    ctx.body = { code: 404, message: '片段不存在', data: null };
+    return;
+  }
+  if (existing.user_id !== user.userId) {
+    ctx.body = { code: 403, message: '无权操作此片段', data: null };
+    return;
+  }
+
   const result = dreamCollectionService.updateEmotionFragment(user.userId, fragmentId, data);
 
   if (result) {
-    ctx.body = {
-      code: 200,
-      message: '更新成功',
-      data: result
-    };
+    ctx.body = { code: 200, message: '更新成功', data: result };
   } else {
-    ctx.body = {
-      code: 404,
-      message: '片段不存在',
-      data: null
-    };
+    ctx.body = { code: 400, message: '更新失败', data: null };
   }
 });
 
@@ -82,11 +85,21 @@ router.delete('/dream-collection/fragments/:id', async (ctx) => {
   const user = getCurrentUser(ctx);
   const fragmentId = parseInt(ctx.params.id);
 
+  const existing = dreamCollectionRepository.getEmotionFragmentById(fragmentId);
+  if (!existing) {
+    ctx.body = { code: 404, message: '片段不存在', data: null };
+    return;
+  }
+  if (existing.user_id !== user.userId) {
+    ctx.body = { code: 403, message: '无权操作此片段', data: null };
+    return;
+  }
+
   const success = dreamCollectionService.deleteEmotionFragment(user.userId, fragmentId);
 
   ctx.body = {
     code: success ? 200 : 404,
-    message: success ? '删除成功' : '片段不存在',
+    message: success ? '删除成功' : '删除失败',
     data: null
   };
 });
@@ -96,11 +109,21 @@ router.post('/dream-collection/fragments/:id/star', async (ctx) => {
   const fragmentId = parseInt(ctx.params.id);
   const { isStarred } = ctx.request.body;
 
+  const existing = dreamCollectionRepository.getEmotionFragmentById(fragmentId);
+  if (!existing) {
+    ctx.body = { code: 404, message: '片段不存在', data: null };
+    return;
+  }
+  if (existing.user_id !== user.userId) {
+    ctx.body = { code: 403, message: '无权操作此片段', data: null };
+    return;
+  }
+
   const result = dreamCollectionService.starEmotionFragment(user.userId, fragmentId, isStarred);
 
   ctx.body = {
-    code: result ? 200 : 404,
-    message: result ? '操作成功' : '片段不存在',
+    code: result ? 200 : 400,
+    message: result ? '操作成功' : '操作失败',
     data: result
   };
 });
@@ -158,11 +181,21 @@ router.delete('/dream-collection/story-cards/:id', async (ctx) => {
   const user = getCurrentUser(ctx);
   const cardId = parseInt(ctx.params.id);
 
+  const card = dreamCollectionRepository.getStoryCardById(cardId);
+  if (!card) {
+    ctx.body = { code: 404, message: '故事卡不存在', data: null };
+    return;
+  }
+  if (card.user_id !== user.userId) {
+    ctx.body = { code: 403, message: '无权操作此故事卡', data: null };
+    return;
+  }
+
   const success = dreamCollectionService.deleteStoryCard(user.userId, cardId);
 
   ctx.body = {
     code: success ? 200 : 404,
-    message: success ? '删除成功' : '故事卡不存在',
+    message: success ? '删除成功' : '删除失败',
     data: null
   };
 });
@@ -213,20 +246,22 @@ router.put('/dream-collection/highlights/:id', async (ctx) => {
   const highlightId = parseInt(ctx.params.id);
   const data = ctx.request.body;
 
+  const existing = dreamCollectionRepository.getHighlightById(highlightId);
+  if (!existing) {
+    ctx.body = { code: 404, message: '高光不存在', data: null };
+    return;
+  }
+  if (existing.user_id !== user.userId) {
+    ctx.body = { code: 403, message: '无权操作此高光', data: null };
+    return;
+  }
+
   const result = dreamCollectionService.updateHighlight(user.userId, highlightId, data);
 
   if (result) {
-    ctx.body = {
-      code: 200,
-      message: '更新成功',
-      data: result
-    };
+    ctx.body = { code: 200, message: '更新成功', data: result };
   } else {
-    ctx.body = {
-      code: 404,
-      message: '高光不存在',
-      data: null
-    };
+    ctx.body = { code: 400, message: '更新失败', data: null };
   }
 });
 
@@ -234,11 +269,21 @@ router.delete('/dream-collection/highlights/:id', async (ctx) => {
   const user = getCurrentUser(ctx);
   const highlightId = parseInt(ctx.params.id);
 
+  const existing = dreamCollectionRepository.getHighlightById(highlightId);
+  if (!existing) {
+    ctx.body = { code: 404, message: '高光不存在', data: null };
+    return;
+  }
+  if (existing.user_id !== user.userId) {
+    ctx.body = { code: 403, message: '无权操作此高光', data: null };
+    return;
+  }
+
   const success = dreamCollectionService.deleteHighlight(user.userId, highlightId);
 
   ctx.body = {
     code: success ? 200 : 404,
-    message: success ? '删除成功' : '高光不存在',
+    message: success ? '删除成功' : '删除失败',
     data: null
   };
 });
@@ -248,11 +293,21 @@ router.post('/dream-collection/highlights/:id/favorite', async (ctx) => {
   const highlightId = parseInt(ctx.params.id);
   const { isFavorite } = ctx.request.body;
 
+  const existing = dreamCollectionRepository.getHighlightById(highlightId);
+  if (!existing) {
+    ctx.body = { code: 404, message: '高光不存在', data: null };
+    return;
+  }
+  if (existing.user_id !== user.userId) {
+    ctx.body = { code: 403, message: '无权操作此高光', data: null };
+    return;
+  }
+
   const result = dreamCollectionService.favoriteHighlight(user.userId, highlightId, isFavorite);
 
   ctx.body = {
-    code: result ? 200 : 404,
-    message: result ? '操作成功' : '高光不存在',
+    code: result ? 200 : 400,
+    message: result ? '操作成功' : '操作失败',
     data: result
   };
 });
@@ -310,11 +365,21 @@ router.delete('/dream-collection/goals/:id', async (ctx) => {
   const user = getCurrentUser(ctx);
   const goalId = parseInt(ctx.params.id);
 
+  const goal = dreamCollectionRepository.getGoalById(goalId);
+  if (!goal) {
+    ctx.body = { code: 404, message: '目标不存在', data: null };
+    return;
+  }
+  if (goal.user_id !== user.userId) {
+    ctx.body = { code: 403, message: '无权操作此目标', data: null };
+    return;
+  }
+
   const success = dreamCollectionService.deleteGoal(user.userId, goalId);
 
   ctx.body = {
     code: success ? 200 : 404,
-    message: success ? '删除成功' : '目标不存在',
+    message: success ? '删除成功' : '删除失败',
     data: null
   };
 });

@@ -5,6 +5,7 @@ const taskRepository = require('../repositories/taskRepository');
 const achievementService = require('./achievementService');
 const moodRepository = require('../repositories/moodRepository');
 const notificationEvents = require('../utils/notificationEvents');
+const dreamCollectionService = require('./dreamCollectionService');
 
 class RoomService {
   getRoomList(userId) {
@@ -320,6 +321,17 @@ class RoomService {
     
     achievementService.updateTaskProgress(userId, 'story_read', 1);
 
+    dreamCollectionService.unlockStoryCard(userId, {
+      roomId: roomId,
+      storyId: story.id,
+      cardType: story.is_ending ? 'ending' : (story.is_branch_point ? 'branch_point' : 'chapter'),
+      title: story.title,
+      excerpt: story.content ? story.content.substring(0, 120) : null,
+      roomName: room.name,
+      branchLabel: story.branch_label || null,
+      moodTheme: null
+    });
+
     let nextBranchChoices = [];
     if (story.is_branch_point) {
       const childBranches = storyRepository.getChildBranches(roomId, chapterNumber);
@@ -571,6 +583,17 @@ class RoomService {
 
     roomRepository.setActiveBranch(userId, roomId, story.branch_key);
     roomRepository.updateBranchProgress(userId, roomId, story.branch_key, storyId, story.chapter_number);
+
+    dreamCollectionService.unlockStoryCard(userId, {
+      roomId: roomId,
+      storyId: story.id,
+      cardType: story.is_ending ? 'ending' : (story.is_branch_point ? 'branch_point' : 'chapter'),
+      title: story.title,
+      excerpt: story.content ? story.content.substring(0, 120) : null,
+      roomName: room.name,
+      branchLabel: story.branch_label || null,
+      moodTheme: null
+    });
 
     return {
       success: true,

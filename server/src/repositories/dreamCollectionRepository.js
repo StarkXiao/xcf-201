@@ -75,7 +75,7 @@ class DreamCollectionRepository {
     return db.prepare(sql).get(...params).count;
   }
 
-  updateEmotionFragment(id, data) {
+  updateEmotionFragment(id, userId, data) {
     const fields = [];
     const params = [];
 
@@ -102,14 +102,14 @@ class DreamCollectionRepository {
 
     if (fields.length === 0) return null;
 
-    params.push(id);
-    db.prepare(`UPDATE emotion_fragments SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+    params.push(id, userId);
+    db.prepare(`UPDATE emotion_fragments SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`).run(...params);
     return this.getEmotionFragmentById(id);
   }
 
-  deleteEmotionFragment(id) {
-    const stmt = db.prepare('DELETE FROM emotion_fragments WHERE id = ?');
-    const result = stmt.run(id);
+  deleteEmotionFragment(id, userId) {
+    const stmt = db.prepare('DELETE FROM emotion_fragments WHERE id = ? AND user_id = ?');
+    const result = stmt.run(id, userId);
     return result.changes > 0;
   }
 
@@ -146,6 +146,11 @@ class DreamCollectionRepository {
   getStoryCardByUserAndStory(userId, storyId) {
     const stmt = db.prepare('SELECT * FROM story_cards WHERE user_id = ? AND story_id = ?');
     return stmt.get(userId, storyId);
+  }
+
+  getStoryCardById(id) {
+    const stmt = db.prepare('SELECT * FROM story_cards WHERE id = ?');
+    return stmt.get(id);
   }
 
   getStoryCards(userId, filters = {}) {
@@ -186,9 +191,9 @@ class DreamCollectionRepository {
     return stmt.all(userId);
   }
 
-  deleteStoryCard(id) {
-    const stmt = db.prepare('DELETE FROM story_cards WHERE id = ?');
-    const result = stmt.run(id);
+  deleteStoryCard(id, userId) {
+    const stmt = db.prepare('DELETE FROM story_cards WHERE id = ? AND user_id = ?');
+    const result = stmt.run(id, userId);
     return result.changes > 0;
   }
 
@@ -266,7 +271,7 @@ class DreamCollectionRepository {
     return db.prepare(sql).get(...params).count;
   }
 
-  updateHighlight(id, data) {
+  updateHighlight(id, userId, data) {
     const fields = [];
     const params = [];
 
@@ -293,14 +298,14 @@ class DreamCollectionRepository {
 
     if (fields.length === 0) return null;
 
-    params.push(id);
-    db.prepare(`UPDATE collection_highlights SET ${fields.join(', ')} WHERE id = ?`).run(...params);
+    params.push(id, userId);
+    db.prepare(`UPDATE collection_highlights SET ${fields.join(', ')} WHERE id = ? AND user_id = ?`).run(...params);
     return this.getHighlightById(id);
   }
 
-  deleteHighlight(id) {
-    const stmt = db.prepare('DELETE FROM collection_highlights WHERE id = ?');
-    const result = stmt.run(id);
+  deleteHighlight(id, userId) {
+    const stmt = db.prepare('DELETE FROM collection_highlights WHERE id = ? AND user_id = ?');
+    const result = stmt.run(id, userId);
     return result.changes > 0;
   }
 
@@ -357,9 +362,9 @@ class DreamCollectionRepository {
     return this.getGoalById(id);
   }
 
-  deleteGoal(id) {
-    const stmt = db.prepare('DELETE FROM collection_goals WHERE id = ?');
-    const result = stmt.run(id);
+  deleteGoal(id, userId) {
+    const stmt = db.prepare('DELETE FROM collection_goals WHERE id = ? AND user_id = ?');
+    const result = stmt.run(id, userId);
     return result.changes > 0;
   }
 

@@ -49,15 +49,19 @@ class DreamCollectionService {
   }
 
   updateEmotionFragment(userId, fragmentId, data) {
-    return dreamCollectionRepository.updateEmotionFragment(fragmentId, data);
+    const fragment = dreamCollectionRepository.getEmotionFragmentById(fragmentId);
+    if (!fragment || fragment.user_id !== userId) return null;
+    return dreamCollectionRepository.updateEmotionFragment(fragmentId, userId, data);
   }
 
   deleteEmotionFragment(userId, fragmentId) {
-    return dreamCollectionRepository.deleteEmotionFragment(fragmentId);
+    return dreamCollectionRepository.deleteEmotionFragment(fragmentId, userId);
   }
 
   starEmotionFragment(userId, fragmentId, isStarred) {
-    return dreamCollectionRepository.updateEmotionFragment(fragmentId, { isStarred });
+    const fragment = dreamCollectionRepository.getEmotionFragmentById(fragmentId);
+    if (!fragment || fragment.user_id !== userId) return null;
+    return dreamCollectionRepository.updateEmotionFragment(fragmentId, userId, { isStarred });
   }
 
   getEmotionTypeStats(userId) {
@@ -100,7 +104,7 @@ class DreamCollectionService {
   }
 
   deleteStoryCard(userId, cardId) {
-    return dreamCollectionRepository.deleteStoryCard(cardId);
+    return dreamCollectionRepository.deleteStoryCard(cardId, userId);
   }
 
   createHighlight(userId, data) {
@@ -145,15 +149,19 @@ class DreamCollectionService {
   }
 
   updateHighlight(userId, highlightId, data) {
-    return dreamCollectionRepository.updateHighlight(highlightId, data);
+    const highlight = dreamCollectionRepository.getHighlightById(highlightId);
+    if (!highlight || highlight.user_id !== userId) return null;
+    return dreamCollectionRepository.updateHighlight(highlightId, userId, data);
   }
 
   deleteHighlight(userId, highlightId) {
-    return dreamCollectionRepository.deleteHighlight(highlightId);
+    return dreamCollectionRepository.deleteHighlight(highlightId, userId);
   }
 
   favoriteHighlight(userId, highlightId, isFavorite) {
-    return dreamCollectionRepository.updateHighlight(highlightId, { isFavorite });
+    const highlight = dreamCollectionRepository.getHighlightById(highlightId);
+    if (!highlight || highlight.user_id !== userId) return null;
+    return dreamCollectionRepository.updateHighlight(highlightId, userId, { isFavorite });
   }
 
   getGoals(userId, filters = {}) {
@@ -180,7 +188,7 @@ class DreamCollectionService {
   }
 
   deleteGoal(userId, goalId) {
-    return dreamCollectionRepository.deleteGoal(goalId);
+    return dreamCollectionRepository.deleteGoal(goalId, userId);
   }
 
   updateCollectionGoals(userId, activityType) {
