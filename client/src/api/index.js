@@ -69,7 +69,7 @@ export const roomApi = {
   createNote: (roomId, data) => api.post(`/rooms/${roomId}/notes`, data),
   getRoomNotes: (roomId) => api.get(`/rooms/${roomId}/notes`),
   getStoryNote: (roomId, storyId) => api.get(`/rooms/${roomId}/notes/${storyId}`),
-  deleteNote: (noteId) => api.delete(`/rooms/notes/${noteId}`),
+  deleteNote: (noteId) => api.delete('/rooms/notes/' + noteId),
   getMyNotes: (page = 1, pageSize = 10) => api.get('/rooms/notes/my/list', { params: { page, pageSize } })
 }
 
@@ -134,6 +134,48 @@ export const companionApi = {
   getEvents: (companionId, type = 'available') => api.get(`/companions/${companionId}/events`, { params: { type } }),
   triggerEvent: (companionId, eventId) => api.get(`/companions/${companionId}/events/${eventId}/trigger`),
   completeEvent: (companionId, eventId, choiceId) => api.post(`/companions/${companionId}/events/${eventId}/complete`, { choiceId })
+}
+
+export const wishCommissionApi = {
+  getTemplates: function(params) {
+    if (params === undefined) params = {}
+    return api.get('/wish-commissions/templates', { params: params })
+  },
+  getTemplateTypes: function() {
+    return api.get('/wish-commissions/templates/types')
+  },
+  getMyCommissions: function(params) {
+    if (params === undefined) params = {}
+    return api.get('/wish-commissions/my', { params: params })
+  },
+  getMyStats: function() {
+    return api.get('/wish-commissions/my/stats')
+  },
+  getCommissionDetail: function(id) {
+    return api.get('/wish-commissions/my/' + id)
+  },
+  acceptCommission: function(templateId) {
+    return api.post('/wish-commissions/accept/' + templateId)
+  },
+  updateProgress: function() {
+    return api.post('/wish-commissions/progress/update')
+  },
+  claimReward: function(id) {
+    return api.post('/wish-commissions/' + id + '/claim')
+  },
+  getCoinInfo: function() {
+    return api.get('/wish-commissions/coins/info')
+  },
+  getRetrospectives: function(params) {
+    if (params === undefined) params = {}
+    return api.get('/wish-commissions/retrospectives', { params: params })
+  },
+  getRetrospective: function(commissionId) {
+    return api.get('/wish-commissions/' + commissionId + '/retrospective')
+  },
+  createRetrospective: function(commissionId, data) {
+    return api.post('/wish-commissions/' + commissionId + '/retrospective', data)
+  }
 }
 
 export default api

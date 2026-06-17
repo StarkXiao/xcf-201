@@ -4,6 +4,7 @@ const roomRepository = require('../repositories/roomRepository');
 const achievementRepository = require('../repositories/achievementRepository');
 const achievementService = require('./achievementService');
 const roomService = require('./roomService');
+const wishCommissionService = require('./wishCommissionService');
 const notificationEvents = require('../utils/notificationEvents');
 
 const VALID_MOOD_TYPES = ['happy', 'calm', 'sad', 'anxious', 'angry'];
@@ -139,6 +140,12 @@ class MoodService {
     
     if (streakDays > prevStreakDays && streakDays >= 2) {
       result.notificationEvents.push(notificationEvents.createStreakContinuedEvent(streakDays));
+    }
+    
+    try {
+      wishCommissionService.updateAllCommissions(userId);
+    } catch (e) {
+      console.error('更新心愿委托进度失败:', e);
     }
     
     return result;

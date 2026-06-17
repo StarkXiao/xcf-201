@@ -3,6 +3,7 @@ const roomRepository = require('../repositories/roomRepository');
 const storyRepository = require('../repositories/storyRepository');
 const taskRepository = require('../repositories/taskRepository');
 const achievementService = require('./achievementService');
+const wishCommissionService = require('./wishCommissionService');
 
 class ChapterNoteService {
   createNote(userId, roomId, storyId, content, moodTags = []) {
@@ -73,7 +74,13 @@ class ChapterNoteService {
         }
       }
     });
-
+    
+    try {
+      wishCommissionService.updateAllCommissions(userId);
+    } catch (e) {
+      console.error('更新心愿委托进度失败:', e);
+    }
+    
     return {
       note,
       newlyCompletedTasks,

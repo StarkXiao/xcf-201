@@ -5,7 +5,7 @@ import { useNotificationStore } from '@/stores/notification'
 import { useMoodStore } from '@/stores/mood'
 import { useAchievementStore } from '@/stores/achievement'
 import { computed, onMounted, watch } from 'vue'
-import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse, Archive, MessageCircle, Sparkles } from 'lucide-vue-next'
+import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse, Archive, MessageCircle, Sparkles, Scroll } from 'lucide-vue-next'
 import NotificationToast from './NotificationToast.vue'
 
 const route = useRoute()
@@ -22,6 +22,7 @@ const navItems = [
   { path: '/companions', name: '同行旅伴', icon: Sparkles },
   { path: '/chat', name: '陪伴对话', icon: MessageCircle },
   { path: '/dream-collection', name: '梦境收藏馆', icon: Archive },
+  { path: '/wish-commission', name: '心愿委托', icon: Scroll },
   { path: '/achievements', name: '任务成就', icon: Trophy },
   { path: '/profile', name: '个人中心', icon: User }
 ]
@@ -31,7 +32,7 @@ const isActive = (path) => route.path === path || route.path.startsWith(path + '
 const mobileNavItems = [
   { path: '/calendar', name: '日历', icon: Calendar },
   { path: '/companions', name: '旅伴', icon: Sparkles },
-  { path: '/chat', name: '对话', icon: MessageCircle },
+  { path: '/wish-commission', name: '委托', icon: Scroll },
   { path: '/dream-collection', name: '收藏', icon: Archive },
   { path: '/profile', name: '我的', icon: User }
 ]

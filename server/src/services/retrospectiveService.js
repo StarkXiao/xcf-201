@@ -2,6 +2,7 @@ const retrospectiveRepository = require('../repositories/retrospectiveRepository
 const moodRepository = require('../repositories/moodRepository');
 const taskRepository = require('../repositories/taskRepository');
 const achievementService = require('./achievementService');
+const wishCommissionService = require('./wishCommissionService');
 
 const VALID_RETROSPECT_TYPES = ['feeling', 'insight', 'gratitude', 'lesson', 'other'];
 const VALID_MOOD_TYPES = ['happy', 'calm', 'sad', 'anxious', 'angry'];
@@ -93,7 +94,13 @@ class RetrospectiveService {
     });
 
     const monthData = this.getMonthRetrospectives(userId, new Date().getFullYear(), new Date().getMonth() + 1);
-
+    
+    try {
+      wishCommissionService.updateAllCommissions(userId);
+    } catch (e) {
+      console.error('更新心愿委托进度失败:', e);
+    }
+    
     return {
       retrospective,
       newlyCompletedTasks,

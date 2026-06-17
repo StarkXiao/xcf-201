@@ -6,6 +6,7 @@ const achievementService = require('./achievementService');
 const moodRepository = require('../repositories/moodRepository');
 const notificationEvents = require('../utils/notificationEvents');
 const dreamCollectionService = require('./dreamCollectionService');
+const wishCommissionService = require('./wishCommissionService');
 
 class RoomService {
   getRoomList(userId) {
@@ -261,6 +262,12 @@ class RoomService {
           }
         });
       }
+      
+      try {
+        wishCommissionService.updateAllCommissions(userId);
+      } catch (e) {
+        console.error('更新心愿委托进度失败:', e);
+      }
     }
     
     return {
@@ -339,6 +346,12 @@ class RoomService {
         ...cb,
         isAvailable: this.checkBranchCondition(userId, cb.conditions)
       }));
+    }
+    
+    try {
+      wishCommissionService.updateAllCommissions(userId);
+    } catch (e) {
+      console.error('更新心愿委托进度失败:', e);
     }
     
     return {

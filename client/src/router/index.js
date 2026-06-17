@@ -78,6 +78,12 @@ const routes = [
     name: 'Chat',
     component: () => import('@/views/Chat.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/wish-commission',
+    name: 'WishCommission',
+    component: () => import('@/views/WishCommission.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 
