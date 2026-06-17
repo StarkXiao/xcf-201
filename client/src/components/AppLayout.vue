@@ -7,7 +7,7 @@ import { useAchievementStore } from '@/stores/achievement'
 import { useCrisisCenterStore } from '@/stores/crisisCenter'
 import { useMemoryLetterStore } from '@/stores/memoryLetter'
 import { computed, onMounted, onUnmounted, watch } from 'vue'
-import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse, Archive, MessageCircle, Sparkles, Scroll, ShieldAlert, Mail, FlaskConical } from 'lucide-vue-next'
+import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse, Archive, MessageCircle, Sparkles, Scroll, ShieldAlert, Mail, FlaskConical, Map } from 'lucide-vue-next'
 import NotificationToast from './NotificationToast.vue'
 
 const route = useRoute()

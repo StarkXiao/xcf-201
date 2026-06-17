@@ -102,6 +102,12 @@ const routes = [
     name: 'MoodLab',
     component: () => import('@/views/MoodLab.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/healing-map',
+    name: 'HealingMap',
+    component: () => import('@/views/HealingMap.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

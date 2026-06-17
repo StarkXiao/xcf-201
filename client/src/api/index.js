@@ -223,4 +223,14 @@ export const wishCommissionApi = {
   }
 }
 
+export const healingMapApi = {
+  getOverview: () => api.get('/healing-map/overview'),
+  getStages: () => api.get('/healing-map/stages'),
+  getStageDetail: (stageId) => api.get(`/healing-map/stages/${stageId}`),
+  getJourney: () => api.get('/healing-map/journey'),
+  getMilestones: () => api.get('/healing-map/milestones'),
+  getUnlocks: () => api.get('/healing-map/unlocks'),
+  claimStageReward: (stageId) => api.post(`/healing-map/stages/${stageId}/claim`)
+}
+
 export default api
