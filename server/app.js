@@ -71,6 +71,7 @@ const wishCommissionRoutes = require('./src/routes/wishCommissions');
 const crisisCenterRoutes = require('./src/routes/crisisCenter');
 const memoryLetterRoutes = require('./src/routes/memoryLetters');
 const notificationRoutes = require('./src/routes/notifications');
+const moodLabRoutes = require('./src/routes/moodLabs');
 const memoryLetterService = require('./src/services/memoryLetterService');
 
 const publicRouter = new Router();
@@ -119,6 +120,8 @@ app.use(memoryLetterRoutes.routes());
 app.use(memoryLetterRoutes.allowedMethods());
 app.use(notificationRoutes.routes());
 app.use(notificationRoutes.allowedMethods());
+app.use(moodLabRoutes.routes());
+app.use(moodLabRoutes.allowedMethods());
 
 const lastCheckedUsers = new Map();
 const CHECK_COOLDOWN_MS = 5 * 60 * 1000;

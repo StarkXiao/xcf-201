@@ -96,6 +96,12 @@ const routes = [
     name: 'MemoryLetter',
     component: () => import('@/views/MemoryLetter.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/mood-lab',
+    name: 'MoodLab',
+    component: () => import('@/views/MoodLab.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

@@ -7,7 +7,7 @@ import { useAchievementStore } from '@/stores/achievement'
 import { useCrisisCenterStore } from '@/stores/crisisCenter'
 import { useMemoryLetterStore } from '@/stores/memoryLetter'
 import { computed, onMounted, onUnmounted, watch } from 'vue'
-import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse, Archive, MessageCircle, Sparkles, Scroll, ShieldAlert, Mail } from 'lucide-vue-next'
+import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse, Archive, MessageCircle, Sparkles, Scroll, ShieldAlert, Mail, FlaskConical } from 'lucide-vue-next'
 import NotificationToast from './NotificationToast.vue'
 
 const route = useRoute()
@@ -22,6 +22,7 @@ const memoryLetterStore = useMemoryLetterStore()
 const navItems = [
   { path: '/calendar', name: '心情日历', icon: Calendar },
   { path: '/prescription', name: '情绪处方笺', icon: HeartPulse },
+  { path: '/mood-lab', name: '情绪实验室', icon: FlaskConical },
   { path: '/crisis-center', name: '危机预警', icon: ShieldAlert },
   { path: '/rooms', name: '剧情房间', icon: DoorOpen },
   { path: '/companions', name: '同行旅伴', icon: Sparkles },

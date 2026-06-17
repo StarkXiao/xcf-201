@@ -168,6 +168,19 @@ export const notificationApi = {
   clearOld: (days) => api.delete('/notifications/old', { params: { days } })
 }
 
+export const moodLabApi = {
+  getOverview: () => api.get('/mood-lab/overview'),
+  getTrends: () => api.get('/mood-lab/trends'),
+  getMoodTrend: (months) => api.get('/mood-lab/trends/mood', { params: { months } }),
+  getTagStats: (days) => api.get('/mood-lab/trends/tags', { params: { days } }),
+  getTagTrend: (tag, days) => api.get(`/mood-lab/trends/tags/${tag}`, { params: { days } }),
+  getRecordFrequency: (days) => api.get('/mood-lab/trends/record-frequency', { params: { days } }),
+  getStoryStats: () => api.get('/mood-lab/trends/story'),
+  getRewardStats: (days) => api.get('/mood-lab/trends/rewards', { params: { days } }),
+  getClustering: () => api.get('/mood-lab/clustering'),
+  getQuests: () => api.get('/mood-lab/quests')
+}
+
 export const wishCommissionApi = {
   getTemplates: function(params) {
     if (params === undefined) params = {}
