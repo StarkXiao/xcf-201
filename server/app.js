@@ -47,7 +47,8 @@ router.get('/', async (ctx) => {
       prescriptions: '/api/prescriptions/*',
       dreamCollection: '/api/dream-collection/*',
       wishCommissions: '/api/wish-commissions/*',
-      crisisCenter: '/api/crisis-center/*'
+      crisisCenter: '/api/crisis-center/*',
+      healingMap: '/api/healing-map/*'
     }
   };
 });
@@ -72,6 +73,7 @@ const crisisCenterRoutes = require('./src/routes/crisisCenter');
 const memoryLetterRoutes = require('./src/routes/memoryLetters');
 const notificationRoutes = require('./src/routes/notifications');
 const moodLabRoutes = require('./src/routes/moodLabs');
+const healingMapRoutes = require('./src/routes/healingMap');
 const memoryLetterService = require('./src/services/memoryLetterService');
 
 const publicRouter = new Router();
@@ -122,6 +124,8 @@ app.use(notificationRoutes.routes());
 app.use(notificationRoutes.allowedMethods());
 app.use(moodLabRoutes.routes());
 app.use(moodLabRoutes.allowedMethods());
+app.use(healingMapRoutes.routes());
+app.use(healingMapRoutes.allowedMethods());
 
 const lastCheckedUsers = new Map();
 const CHECK_COOLDOWN_MS = 5 * 60 * 1000;

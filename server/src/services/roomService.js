@@ -8,6 +8,7 @@ const notificationEvents = require('../utils/notificationEvents');
 const dreamCollectionService = require('./dreamCollectionService');
 const wishCommissionService = require('./wishCommissionService');
 const crisisCenterService = require('./crisisCenterService');
+const healingMapService = require('./healingMapService');
 
 class RoomService {
   getRoomList(userId) {
@@ -269,6 +270,12 @@ class RoomService {
       } catch (e) {
         console.error('更新心愿委托进度失败:', e);
       }
+
+      try {
+        healingMapService.updateProgress(userId, 'room_unlock', 1);
+      } catch (e) {
+        console.error('更新疗愈地图进度失败:', e);
+      }
     }
     
     return {
@@ -379,6 +386,12 @@ class RoomService {
       result.crisisAnalysis = crisisCenterService.getFullAnalysis(userId);
     } catch (e) {
       console.error('生成危机预警分析失败:', e);
+    }
+
+    try {
+      healingMapService.updateProgress(userId, 'story_read', 1);
+    } catch (e) {
+      console.error('更新疗愈地图进度失败:', e);
     }
 
     return result;

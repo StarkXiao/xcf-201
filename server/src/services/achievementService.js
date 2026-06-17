@@ -4,6 +4,7 @@ const userRepository = require('../repositories/userRepository');
 const moodRepository = require('../repositories/moodRepository');
 const notificationEvents = require('../utils/notificationEvents');
 const crisisCenterService = require('./crisisCenterService');
+const healingMapService = require('./healingMapService');
 
 class AchievementService {
   getTasks(userId) {
@@ -196,6 +197,12 @@ class AchievementService {
       result.crisisAnalysis = crisisCenterService.getFullAnalysis(userId);
     } catch (e) {
       console.error('生成危机预警分析失败:', e);
+    }
+
+    try {
+      healingMapService.updateProgress(userId, 'task_claim', 1);
+    } catch (e) {
+      console.error('更新疗愈地图进度失败:', e);
     }
 
     return result;
@@ -395,6 +402,12 @@ class AchievementService {
                           taskRepository.getCompletedTaskCountByType(userId, 'chain');
     
     achievementRepository.checkAndUnlock(userId, 'all_tasks_completed', completedCount >= totalTasks ? 1 : 0);
+    
+    try {
+      healingMapService.updateProgress(userId, 'achievement_update', 1);
+    } catch (e) {
+      console.error('更新疗愈地图进度失败:', e);
+    }
   }
 
   getTaskStats(userId) {

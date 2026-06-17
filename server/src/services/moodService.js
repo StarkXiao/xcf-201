@@ -7,6 +7,7 @@ const roomService = require('./roomService');
 const wishCommissionService = require('./wishCommissionService');
 const notificationEvents = require('../utils/notificationEvents');
 const crisisCenterService = require('./crisisCenterService');
+const healingMapService = require('./healingMapService');
 
 const VALID_MOOD_TYPES = ['happy', 'calm', 'sad', 'anxious', 'angry'];
 const VALID_SEGMENTS = ['morning', 'afternoon', 'evening', 'day'];
@@ -157,6 +158,15 @@ class MoodService {
       result.crisisAnalysis = crisisCenterService.getFullAnalysis(userId);
     } catch (e) {
       console.error('生成危机预警分析失败:', e);
+    }
+
+    try {
+      const healingMapUpdate = healingMapService.updateProgress(userId, 'mood_record', 1);
+      if (healingMapUpdate.newlyUnlocked && healingMapUpdate.newlyUnlocked.length > 0) {
+        result.healingMapUnlocks = healingMapUpdate.newlyUnlocked;
+      }
+    } catch (e) {
+      console.error('更新疗愈地图进度失败:', e);
     }
 
     return result;

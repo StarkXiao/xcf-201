@@ -121,11 +121,8 @@ async function loadData() {
   isLoading.value = true
   try {
     await healingMapStore.fetchAllData()
-    if (stages.value.length === 0) {
-      healingMapStore.generateMockData()
-    }
   } catch (e) {
-    healingMapStore.generateMockData()
+    console.error('加载疗愈地图数据失败:', e)
   } finally {
     isLoading.value = false
   }

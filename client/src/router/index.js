@@ -108,6 +108,12 @@ const routes = [
     name: 'HealingMap',
     component: () => import('@/views/HealingMap.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/night-radio',
+    name: 'NightRadio',
+    component: () => import('@/views/NightRadio.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

@@ -233,4 +233,19 @@ export const healingMapApi = {
   claimStageReward: (stageId) => api.post(`/healing-map/stages/${stageId}/claim`)
 }
 
+export const nightRadioApi = {
+  getPrograms: (params = {}) => api.get('/night-radio/programs', { params }),
+  getRecommendedPrograms: () => api.get('/night-radio/programs/recommended'),
+  getProgramDetail: (id) => api.get(`/night-radio/programs/${id}`),
+  getComfortTexts: (moodType = null) => api.get('/night-radio/comfort-texts', { params: { moodType } }),
+  getLinkedTasks: (programId = null) => api.get('/night-radio/linked-tasks', { params: { programId } }),
+  getPlayHistory: (params = {}) => api.get('/night-radio/history', { params }),
+  addToHistory: (programId) => api.post('/night-radio/history', { programId }),
+  getFavorites: () => api.get('/night-radio/favorites'),
+  toggleFavorite: (programId) => api.post(`/night-radio/favorites/${programId}/toggle`),
+  getStationStatus: () => api.get('/night-radio/station/status'),
+  getTodaySchedule: () => api.get('/night-radio/schedule/today'),
+  completeLinkedTask: (taskId) => api.post(`/night-radio/linked-tasks/${taskId}/complete`)
+}
+
 export default api
