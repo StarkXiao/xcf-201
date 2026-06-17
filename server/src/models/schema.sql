@@ -424,3 +424,38 @@ CREATE INDEX IF NOT EXISTS idx_companion_conversations_created ON companion_conv
 CREATE INDEX IF NOT EXISTS idx_companion_events_template ON companion_events(companion_template_id);
 CREATE INDEX IF NOT EXISTS idx_user_companion_events_user ON user_companion_events(user_id, companion_id);
 CREATE INDEX IF NOT EXISTS idx_companion_growth_logs_user ON companion_growth_logs(user_id, companion_id);
+
+-- 回忆邮局 - 信件表
+CREATE TABLE IF NOT EXISTS memory_letters (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  title VARCHAR(200) NOT NULL,
+  letter_content TEXT NOT NULL,
+  source_date DATE NOT NULL,
+  delivery_date DATE NOT NULL,
+  status VARCHAR(20) NOT NULL DEFAULT 'pending',
+  mood_snapshot TEXT,
+  room_snapshot TEXT,
+  growth_snapshot TEXT,
+  is_read BOOLEAN DEFAULT 0,
+  read_at DATETIME,
+  delivered_at DATETIME,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id)
+);
+
+-- 回忆邮局 - 信件内容详情表（可选，用于存储更详细的快照数据）
+CREATE TABLE IF NOT EXISTS memory_letter_details (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  letter_id INTEGER NOT NULL,
+  detail_type VARCHAR(30) NOT NULL,
+  detail_data TEXT NOT NULL,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (letter_id) REFERENCES memory_letters(id)
+);
+
+-- 创建回忆邮局相关索引
+CREATE INDEX IF NOT EXISTS idx_memory_letters_user_id ON memory_letters(user_id);
+CREATE INDEX IF NOT EXISTS idx_memory_letters_status ON memory_letters(user_id, status);
+CREATE INDEX IF NOT EXISTS idx_memory_letters_delivery ON memory_letters(user_id, delivery_date);
+CREATE INDEX IF NOT EXISTS idx_memory_letter_details_letter ON memory_letter_details(letter_id);

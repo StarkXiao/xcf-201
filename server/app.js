@@ -69,6 +69,7 @@ const dreamCollectionRoutes = require('./src/routes/dreamCollections');
 const companionRoutes = require('./src/routes/companions');
 const wishCommissionRoutes = require('./src/routes/wishCommissions');
 const crisisCenterRoutes = require('./src/routes/crisisCenter');
+const memoryLetterRoutes = require('./src/routes/memoryLetters');
 
 const publicRouter = new Router();
 publicRouter.get('/api/auth/login', async (ctx) => {
@@ -112,6 +113,8 @@ app.use(wishCommissionRoutes.routes());
 app.use(wishCommissionRoutes.allowedMethods());
 app.use(crisisCenterRoutes.routes());
 app.use(crisisCenterRoutes.allowedMethods());
+app.use(memoryLetterRoutes.routes());
+app.use(memoryLetterRoutes.allowedMethods());
 
 app.listen(PORT, () => {
   console.log(`

@@ -5,8 +5,9 @@ import { useNotificationStore } from '@/stores/notification'
 import { useMoodStore } from '@/stores/mood'
 import { useAchievementStore } from '@/stores/achievement'
 import { useCrisisCenterStore } from '@/stores/crisisCenter'
+import { useMemoryLetterStore } from '@/stores/memoryLetter'
 import { computed, onMounted, watch } from 'vue'
-import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse, Archive, MessageCircle, Sparkles, Scroll, ShieldAlert } from 'lucide-vue-next'
+import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse, Archive, MessageCircle, Sparkles, Scroll, ShieldAlert, Mail } from 'lucide-vue-next'
 import NotificationToast from './NotificationToast.vue'
 
 const route = useRoute()
@@ -16,6 +17,7 @@ const notificationStore = useNotificationStore()
 const moodStore = useMoodStore()
 const achievementStore = useAchievementStore()
 const crisisStore = useCrisisCenterStore()
+const memoryLetterStore = useMemoryLetterStore()
 
 const navItems = [
   { path: '/calendar', name: '心情日历', icon: Calendar },
@@ -26,6 +28,7 @@ const navItems = [
   { path: '/chat', name: '陪伴对话', icon: MessageCircle },
   { path: '/dream-collection', name: '梦境收藏馆', icon: Archive },
   { path: '/wish-commission', name: '心愿委托', icon: Scroll },
+  { path: '/memory-letter', name: '回忆邮局', icon: Mail },
   { path: '/achievements', name: '任务成就', icon: Trophy },
   { path: '/profile', name: '个人中心', icon: User }
 ]
@@ -94,6 +97,17 @@ async function checkStreakAndReminders() {
           duration: 6000,
           data: { level: overallLevel, signalCount: signals.length }
         })
+      }
+    }
+  } catch (e) {
+    // ignore error
+  }
+
+  try {
+    const letterResult = await memoryLetterStore.checkDeliver()
+    if (letterResult.success && letterResult.data) {
+      if (letterResult.data.notificationEvents && letterResult.data.notificationEvents.length > 0) {
+        notificationStore.push(letterResult.data.notificationEvents)
       }
     }
   } catch (e) {

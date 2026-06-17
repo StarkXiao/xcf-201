@@ -7,6 +7,8 @@ const EVENT_TYPES = {
   STREAK_BROKEN: 'streak_broken',
   STREAK_CONTINUED: 'streak_continued',
   CRISIS_ALERT: 'crisis_alert',
+  MEMORY_LETTER_CREATED: 'memory_letter_created',
+  MEMORY_LETTER_DELIVERED: 'memory_letter_delivered',
   ERROR: 'error',
   INFO: 'info'
 }
@@ -20,6 +22,8 @@ const EVENT_CATEGORIES = {
   [EVENT_TYPES.STREAK_BROKEN]: 'warning',
   [EVENT_TYPES.STREAK_CONTINUED]: 'success',
   [EVENT_TYPES.CRISIS_ALERT]: 'warning',
+  [EVENT_TYPES.MEMORY_LETTER_CREATED]: 'success',
+  [EVENT_TYPES.MEMORY_LETTER_DELIVERED]: 'info',
   [EVENT_TYPES.ERROR]: 'error',
   [EVENT_TYPES.INFO]: 'info'
 }
@@ -33,6 +37,8 @@ const EVENT_ICONS = {
   [EVENT_TYPES.STREAK_BROKEN]: 'flame',
   [EVENT_TYPES.STREAK_CONTINUED]: 'flame',
   [EVENT_TYPES.CRISIS_ALERT]: 'shield-alert',
+  [EVENT_TYPES.MEMORY_LETTER_CREATED]: 'mail',
+  [EVENT_TYPES.MEMORY_LETTER_DELIVERED]: 'mail-open',
   [EVENT_TYPES.ERROR]: 'alert',
   [EVENT_TYPES.INFO]: 'info'
 }
@@ -201,6 +207,34 @@ function createBatchEventsFromMoodResult(result) {
   return events
 }
 
+function createMemoryLetterCreatedEvent(letter) {
+  const deliveryDate = letter.deliveryDate || letter.delivery_date
+  return createEvent(
+    EVENT_TYPES.MEMORY_LETTER_CREATED,
+    { letterId: letter.id, letterTitle: letter.title, deliveryDate },
+    {
+      title: '信件已寄出',
+      message: `✉️ 「${letter.title}」已存入回忆邮局，将于 ${deliveryDate} 送达`,
+      category: 'success',
+      priority: 'normal'
+    }
+  )
+}
+
+function createMemoryLetterDeliveredEvent(letter) {
+  return createEvent(
+    EVENT_TYPES.MEMORY_LETTER_DELIVERED,
+    { letterId: letter.id, letterTitle: letter.title },
+    {
+      title: '回忆信件送达',
+      message: `📬 来自过去的信「${letter.title}」已送达，快去阅读吧~`,
+      category: 'info',
+      priority: 'high',
+      duration: 6000
+    }
+  )
+}
+
 module.exports = {
   EVENT_TYPES,
   EVENT_CATEGORIES,
@@ -214,5 +248,7 @@ module.exports = {
   createStreakBrokenEvent,
   createStreakContinuedEvent,
   createCrisisAlertEvent,
+  createMemoryLetterCreatedEvent,
+  createMemoryLetterDeliveredEvent,
   createBatchEventsFromMoodResult
 }

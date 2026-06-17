@@ -90,6 +90,12 @@ const routes = [
     name: 'CrisisCenter',
     component: () => import('@/views/CrisisCenter.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/memory-letter',
+    name: 'MemoryLetter',
+    component: () => import('@/views/MemoryLetter.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

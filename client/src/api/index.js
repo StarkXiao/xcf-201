@@ -140,6 +140,23 @@ export const crisisCenterApi = {
   getAnalysis: () => api.get('/crisis-center/analysis')
 }
 
+export const memoryLetterApi = {
+  getConfig: () => api.get('/memory-letters/config'),
+  getStats: () => api.get('/memory-letters/stats'),
+  getUpcoming: (limit) => api.get('/memory-letters/upcoming', { params: { limit } }),
+  getLetters: (params = {}) => api.get('/memory-letters', { params }),
+  getLetterDetail: (id) => api.get(`/memory-letters/${id}`),
+  createLetter: (data) => api.post('/memory-letters', data),
+  checkDeliver: () => api.post('/memory-letters/check-deliver'),
+  markAsRead: (id) => api.post(`/memory-letters/${id}/read`),
+  cancelLetter: (id) => api.post(`/memory-letters/${id}/cancel`),
+  deleteLetter: (id) => api.delete(`/memory-letters/${id}`),
+  getMoodSnapshot: (date) => api.get(`/memory-letters/snapshot/mood/${date}`),
+  getRoomSnapshot: (date) => api.get(`/memory-letters/snapshot/room/${date}`),
+  getGrowthSnapshot: (date) => api.get(`/memory-letters/snapshot/growth/${date}`),
+  getAvailableDates: () => api.get('/memory-letters/source-dates/available')
+}
+
 export const wishCommissionApi = {
   getTemplates: function(params) {
     if (params === undefined) params = {}

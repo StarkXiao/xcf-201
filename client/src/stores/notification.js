@@ -10,6 +10,8 @@ export const NOTIFICATION_TYPES = {
   STREAK_BROKEN: 'streak_broken',
   STREAK_CONTINUED: 'streak_continued',
   CRISIS_ALERT: 'crisis_alert',
+  MEMORY_LETTER_CREATED: 'memory_letter_created',
+  MEMORY_LETTER_DELIVERED: 'memory_letter_delivered',
   ERROR: 'error',
   INFO: 'info',
   WARNING: 'warning',
@@ -231,6 +233,30 @@ export const useNotificationStore = defineStore('notification', () => {
     })
   }
 
+  function memoryLetterCreated(letter, options = {}) {
+    return addNotification({
+      ...options,
+      type: NOTIFICATION_TYPES.MEMORY_LETTER_CREATED,
+      category: 'success',
+      icon: 'mail',
+      title: '信件已寄出',
+      message: `✉️ 「${letter.title || letter.letterTitle || '回忆信件'}」已存入回忆邮局`
+    })
+  }
+
+  function memoryLetterDelivered(letter, options = {}) {
+    return addNotification({
+      ...options,
+      type: NOTIFICATION_TYPES.MEMORY_LETTER_DELIVERED,
+      category: 'info',
+      icon: 'mail-open',
+      title: '回忆信件送达',
+      message: `📬 来自过去的信「${letter.title || letter.letterTitle || '回忆信件'}」已送达`,
+      priority: 'high',
+      duration: 6000
+    })
+  }
+
   return {
     notifications,
     sortedNotifications,
@@ -249,6 +275,8 @@ export const useNotificationStore = defineStore('notification', () => {
     taskClaimable,
     achievementUnlocked,
     streakBroken,
-    streakContinued
+    streakContinued,
+    memoryLetterCreated,
+    memoryLetterDelivered
   }
 })
