@@ -150,6 +150,34 @@ class CrisisCenterRepository {
     `);
     return stmt.all(userId, days);
   }
+
+  getRecentTagWeights(userId, days = 7) {
+    const stmt = db.prepare(`
+      SELECT record_date, time_segment, tags, tag_weights
+      FROM moods
+      WHERE user_id = ? AND record_date >= date('now', '-' || ? || ' days')
+        AND tag_weights IS NOT NULL AND tag_weights != '{}'
+      ORDER BY record_date DESC,
+        CASE time_segment
+          WHEN 'morning' THEN 1
+          WHEN 'afternoon' THEN 2
+          WHEN 'evening' THEN 3
+          ELSE 4
+        END
+    `);
+    return stmt.all(userId, days);
+  }
+
+  getRecentTags(userId, days = 7) {
+    const stmt = db.prepare(`
+      SELECT record_date, time_segment, tags
+      FROM moods
+      WHERE user_id = ? AND record_date >= date('now', '-' || ? || ' days')
+        AND tags IS NOT NULL AND tags != '[]'
+      ORDER BY record_date DESC
+    `);
+    return stmt.all(userId, days);
+  }
 }
 
 module.exports = new CrisisCenterRepository();

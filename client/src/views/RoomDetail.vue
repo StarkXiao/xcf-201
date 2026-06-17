@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useRoomStore } from '@/stores/room'
 import { useAchievementStore } from '@/stores/achievement'
 import { useNotificationStore } from '@/stores/notification'
+import { useCrisisCenterStore } from '@/stores/crisisCenter'
 import { 
   ArrowLeft, ChevronLeft, ChevronRight, BookOpen, Bookmark, 
   GitBranch, Clock, History, X, Lock, Check, Sparkles,
@@ -15,6 +16,7 @@ const router = useRouter()
 const roomStore = useRoomStore()
 const achievementStore = useAchievementStore()
 const notificationStore = useNotificationStore()
+const crisisStore = useCrisisCenterStore()
 
 const roomId = computed(() => parseInt(route.params.id))
 const currentChapterIndex = ref(0)
@@ -135,8 +137,18 @@ function skipAnimation() {
 async function markAsRead() {
   const chapterNumber = currentChapterIndex.value + 1
   const result = await roomStore.readChapter(roomId.value, chapterNumber, currentBranch.value)
-  
+
   if (result?.success) {
+    if (result.notificationEvents && result.notificationEvents.length > 0) {
+      notificationStore.push(result.notificationEvents)
+    }
+
+    if (result.crisisAnalysis) {
+      crisisStore.$patch({ analysis: result.crisisAnalysis })
+    } else {
+      crisisStore.fetchAnalysis()
+    }
+
     achievementStore.fetchTasks()
     achievementStore.fetchTaskStats()
     achievementStore.fetchReminders()

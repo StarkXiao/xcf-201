@@ -22,6 +22,7 @@ const SIGNAL_TYPES = {
   NEGATIVE_STREAK: 'negative_streak',
   MOOD_GAP: 'mood_gap',
   FLUCTUATION: 'fluctuation',
+  TAG_FLUCTUATION: 'tag_fluctuation',
   TASK_ABANDON: 'task_abandon',
   STORY_STAGNATION: 'story_stagnation'
 };
@@ -38,6 +39,8 @@ class CrisisCenterService {
     const lastStoryRead = crisisRepo.getLastStoryReadDate(userId);
     const lastMoodDate = crisisRepo.getLastMoodRecordDate(userId);
     const streakDates = crisisRepo.getMoodStreakInfo(userId);
+    const recentTagWeights = crisisRepo.getRecentTagWeights(userId, 7);
+    const recentTags = crisisRepo.getRecentTags(userId, 7);
 
     const signals = [];
     const timeline = this.buildTimeline(recentMoods, taskCompletions, storyReadings, 7);
@@ -51,6 +54,9 @@ class CrisisCenterService {
 
     const fluctuationResult = this.checkFluctuation(fluctuationDays);
     if (fluctuationResult) signals.push(fluctuationResult);
+
+    const tagFluctuationResult = this.checkTagFluctuation(recentTagWeights, recentTags);
+    if (tagFluctuationResult) signals.push(tagFluctuationResult);
 
     const taskAbandonResult = this.checkTaskAbandon(taskCompletions, 7);
     if (taskAbandonResult) signals.push(taskAbandonResult);
@@ -314,6 +320,153 @@ class CrisisCenterService {
     return null;
   }
 
+  checkTagFluctuation(recentTagWeights, recentTags) {
+    if (!recentTagWeights || recentTagWeights.length < 2) {
+      return null;
+    }
+
+    const dailyTagWeights = {};
+    for (const record of recentTagWeights) {
+      const date = record.record_date;
+      if (!dailyTagWeights[date]) dailyTagWeights[date] = [];
+      try {
+        const weights = typeof record.tag_weights === 'string'
+          ? JSON.parse(record.tag_weights)
+          : record.tag_weights;
+        if (weights && typeof weights === 'object') {
+          dailyTagWeights[date].push(weights);
+        }
+      } catch (e) {}
+    }
+
+    const dates = Object.keys(dailyTagWeights).sort();
+    if (dates.length < 2) return null;
+
+    let fluctuationDays = 0;
+    let highVarianceDays = 0;
+    const fluctuations = [];
+
+    for (const date of dates) {
+      const records = dailyTagWeights[date];
+      if (records.length < 1) continue;
+
+      const combinedWeights = {};
+      for (const rec of records) {
+        for (const [tag, weight] of Object.entries(rec)) {
+          if (!combinedWeights[tag]) combinedWeights[tag] = [];
+          combinedWeights[tag].push(weight);
+        }
+      }
+
+      let dayHighVariance = false;
+      const volatileTags = [];
+      for (const [tag, weights] of Object.entries(combinedWeights)) {
+        if (weights.length >= 2) {
+          const min = Math.min(...weights);
+          const max = Math.max(...weights);
+          if (max - min >= 3) {
+            dayHighVariance = true;
+            volatileTags.push({ tag, min, max, diff: max - min });
+          }
+        }
+      }
+
+      if (dayHighVariance) {
+        highVarianceDays++;
+        fluctuations.push({ date, volatileTags });
+      }
+    }
+
+    const dayWeightAverages = [];
+    for (const date of dates) {
+      const records = dailyTagWeights[date];
+      let sum = 0;
+      let count = 0;
+      for (const rec of records) {
+        for (const weight of Object.values(rec)) {
+          if (typeof weight === 'number') {
+            sum += weight;
+            count++;
+          }
+        }
+      }
+      if (count > 0) {
+        dayWeightAverages.push({ date, avg: sum / count, count });
+      }
+    }
+
+    if (dayWeightAverages.length >= 2) {
+      for (let i = 1; i < dayWeightAverages.length; i++) {
+        const prev = dayWeightAverages[i - 1].avg;
+        const curr = dayWeightAverages[i].avg;
+        const diff = Math.abs(curr - prev);
+        if (diff >= 1.5) {
+          fluctuationDays++;
+        }
+      }
+    }
+
+    let tagVarietyDays = 0;
+    if (recentTags && recentTags.length > 0) {
+      const dailyTagSets = {};
+      for (const t of recentTags) {
+        if (!dailyTagSets[t.record_date]) dailyTagSets[t.record_date] = new Set();
+        try {
+          const tags = typeof t.tags === 'string' ? JSON.parse(t.tags) : t.tags;
+          if (Array.isArray(tags)) tags.forEach(tag => dailyTagSets[t.record_date].add(tag));
+        } catch (e) {}
+      }
+      const distinctDates = Object.keys(dailyTagSets);
+      if (distinctDates.length >= 2) {
+        for (const date of distinctDates) {
+          if (dailyTagSets[date].size >= 5) {
+            tagVarietyDays++;
+          }
+        }
+      }
+    }
+
+    const totalSignals = highVarianceDays + fluctuationDays + tagVarietyDays;
+
+    if (totalSignals >= 4) {
+      return {
+        type: SIGNAL_TYPES.TAG_FLUCTUATION,
+        level: ALERT_LEVELS.CRISIS,
+        title: '标签剧烈波动',
+        description: `近7天有${highVarianceDays}天出现标签权重剧烈变化、${fluctuationDays}天日均波动较大，可能反映内心状态不稳`,
+        highVarianceDays,
+        fluctuationDays,
+        tagVarietyDays,
+        details: fluctuations.slice(0, 3)
+      };
+    }
+    if (totalSignals >= 2) {
+      return {
+        type: SIGNAL_TYPES.TAG_FLUCTUATION,
+        level: ALERT_LEVELS.FIRM,
+        title: '标签波动明显',
+        description: `近7天有${highVarianceDays}天出现同类标签权重差异大、${fluctuationDays}天情绪标签整体偏移`,
+        highVarianceDays,
+        fluctuationDays,
+        tagVarietyDays,
+        details: fluctuations.slice(0, 3)
+      };
+    }
+    if (totalSignals >= 1) {
+      return {
+        type: SIGNAL_TYPES.TAG_FLUCTUATION,
+        level: ALERT_LEVELS.GENTLE,
+        title: '标签有波动迹象',
+        description: `近7天有轻微标签权重波动迹象，注意观察自己的关注点变化`,
+        highVarianceDays,
+        fluctuationDays,
+        tagVarietyDays,
+        details: fluctuations.slice(0, 3)
+      };
+    }
+    return null;
+  }
+
   checkTaskAbandon(taskCompletions, days) {
     const completedDays = taskCompletions.length;
     const abandonDays = days - completedDays;
@@ -552,6 +705,18 @@ class CrisisCenterService {
             priority: 'normal'
           });
           break;
+        case SIGNAL_TYPES.TAG_FLUCTUATION:
+          recommendations.push({
+            type: 'tag_stability',
+            title: '标签异常波动',
+            actions: [
+              '关注同一个标签的权重变化，理解自己的关注点起伏',
+              '尝试用日记记录情绪波动前后的事件',
+              '如果标签方向持续大幅摆动，考虑与信任的人聊聊',
+            ],
+            priority: signal.level === ALERT_LEVELS.CRISIS ? 'high' : 'normal'
+          });
+          break;
         case SIGNAL_TYPES.TASK_ABANDON:
           recommendations.push({
             type: 'task_adjust',
@@ -631,6 +796,70 @@ class CrisisCenterService {
     }
 
     return base;
+  }
+
+  getCrisisNotification(userId) {
+    try {
+      const analysis = this.getFullAnalysis(userId);
+      const { overallLevel, signals } = analysis;
+
+      if (overallLevel === ALERT_LEVELS.NORMAL) {
+        return null;
+      }
+
+      if (overallLevel === ALERT_LEVELS.CRISIS || overallLevel === ALERT_LEVELS.FIRM || overallLevel === ALERT_LEVELS.GENTLE) {
+        const levelLabels = {
+          gentle: '轻微关注',
+          firm: '需要关注',
+          crisis: '紧急关注'
+        };
+        const categories = {
+          gentle: 'warning',
+          firm: 'warning',
+          crisis: 'error'
+        };
+        const priorities = {
+          gentle: 'normal',
+          firm: 'normal',
+          crisis: 'high'
+        };
+
+        const urgentSignals = signals.filter(s =>
+          s.level === ALERT_LEVELS.CRISIS || s.level === ALERT_LEVELS.FIRM
+        );
+
+        const topSignals = urgentSignals.length > 0
+          ? urgentSignals.slice(0, 2)
+          : signals.slice(0, 2);
+
+        const signalLabels = {
+          negative_streak: '负面连续',
+          mood_gap: '记录断档',
+          fluctuation: '情绪波动',
+          tag_fluctuation: '标签波动',
+          task_abandon: '任务断签',
+          story_stagnation: '剧情停滞'
+        };
+
+        const signalTitles = topSignals.map(s => signalLabels[s.type] || s.type).join('、');
+
+        return {
+          type: 'crisis_alert',
+          category: categories[overallLevel] || 'warning',
+          icon: 'shield-alert',
+          title: '情绪危机预警',
+          message: `当前状态：${levelLabels[overallLevel]}，检测到${signals.length}个信号（${signalTitles}），建议前往危机预警中心查看详情`,
+          priority: priorities[overallLevel] || 'normal',
+          duration: 6000,
+          data: { level: overallLevel, signalCount: signals.length, signalTypes: signals.map(s => s.type) }
+        };
+      }
+
+      return null;
+    } catch (e) {
+      console.error('生成危机通知失败:', e);
+      return null;
+    }
   }
 }
 

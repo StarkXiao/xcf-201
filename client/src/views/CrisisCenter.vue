@@ -53,6 +53,7 @@ const signalTypeConfig = {
   negative_streak: { label: '负面连续', icon: TrendingDown, color: 'var(--mood-anxious)' },
   mood_gap: { label: '记录断档', icon: Calendar, color: 'var(--mood-sad)' },
   fluctuation: { label: '异常波动', icon: Activity, color: 'var(--color-warning)' },
+  tag_fluctuation: { label: '标签波动', icon: Sparkles, color: 'var(--color-secondary)' },
   task_abandon: { label: '任务断签', icon: Target, color: 'var(--color-accent)' },
   story_stagnation: { label: '剧情停滞', icon: BookOpen, color: 'var(--color-secondary)' }
 }

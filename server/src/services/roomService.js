@@ -7,6 +7,7 @@ const moodRepository = require('../repositories/moodRepository');
 const notificationEvents = require('../utils/notificationEvents');
 const dreamCollectionService = require('./dreamCollectionService');
 const wishCommissionService = require('./wishCommissionService');
+const crisisCenterService = require('./crisisCenterService');
 
 class RoomService {
   getRoomList(userId) {
@@ -353,8 +354,8 @@ class RoomService {
     } catch (e) {
       console.error('更新心愿委托进度失败:', e);
     }
-    
-    return {
+
+    const result = {
       success: true,
       story: {
         id: story.id,
@@ -369,6 +370,18 @@ class RoomService {
       nextBranchChoices,
       currentBranch: activeBranch
     };
+
+    try {
+      const crisisNotification = crisisCenterService.getCrisisNotification(userId);
+      if (crisisNotification) {
+        result.notificationEvents = [crisisNotification];
+      }
+      result.crisisAnalysis = crisisCenterService.getFullAnalysis(userId);
+    } catch (e) {
+      console.error('生成危机预警分析失败:', e);
+    }
+
+    return result;
   }
 
   getAvailableBranches(userId, roomId) {

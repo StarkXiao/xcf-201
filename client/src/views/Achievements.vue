@@ -4,6 +4,7 @@ import { useAchievementStore } from '@/stores/achievement'
 import { useNotificationStore } from '@/stores/notification'
 import { useMoodStore } from '@/stores/mood'
 import { useRoomStore } from '@/stores/room'
+import { useCrisisCenterStore } from '@/stores/crisisCenter'
 import { useRouter } from 'vue-router'
 import { 
   Trophy, Target, Gift, CheckCircle, Clock, Star, 
@@ -18,6 +19,7 @@ const achievementStore = useAchievementStore()
 const notificationStore = useNotificationStore()
 const moodStore = useMoodStore()
 const roomStore = useRoomStore()
+const crisisStore = useCrisisCenterStore()
 const router = useRouter()
 
 const activeTab = ref('tasks')
@@ -118,16 +120,27 @@ async function loadData() {
 
 async function claimReward(taskId) {
   claimingId.value = taskId
-  
+
   const result = await achievementStore.claimTask(taskId)
-  
+
   claimingId.value = null
-  
+
   if (result.success) {
     notificationStore.success(
       `🎉 领取成功！获得 ${result.data.reward} 星币`,
       '奖励领取成功'
     )
+
+    if (result.data.notificationEvents && result.data.notificationEvents.length > 0) {
+      notificationStore.push(result.data.notificationEvents)
+    }
+
+    if (result.data.crisisAnalysis) {
+      crisisStore.$patch({ analysis: result.data.crisisAnalysis })
+    } else {
+      crisisStore.fetchAnalysis()
+    }
+
     await achievementStore.fetchTasks()
     await achievementStore.fetchAchievements()
   } else {

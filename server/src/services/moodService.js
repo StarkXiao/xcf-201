@@ -6,6 +6,7 @@ const achievementService = require('./achievementService');
 const roomService = require('./roomService');
 const wishCommissionService = require('./wishCommissionService');
 const notificationEvents = require('../utils/notificationEvents');
+const crisisCenterService = require('./crisisCenterService');
 
 const VALID_MOOD_TYPES = ['happy', 'calm', 'sad', 'anxious', 'angry'];
 const VALID_SEGMENTS = ['morning', 'afternoon', 'evening', 'day'];
@@ -147,7 +148,17 @@ class MoodService {
     } catch (e) {
       console.error('更新心愿委托进度失败:', e);
     }
-    
+
+    try {
+      const crisisNotification = crisisCenterService.getCrisisNotification(userId);
+      if (crisisNotification) {
+        result.notificationEvents.push(crisisNotification);
+      }
+      result.crisisAnalysis = crisisCenterService.getFullAnalysis(userId);
+    } catch (e) {
+      console.error('生成危机预警分析失败:', e);
+    }
+
     return result;
   }
 

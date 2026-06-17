@@ -4,6 +4,7 @@ import { useMoodStore } from '@/stores/mood'
 import { useAchievementStore } from '@/stores/achievement'
 import { useRetrospectiveStore } from '@/stores/retrospective'
 import { useNotificationStore } from '@/stores/notification'
+import { useCrisisCenterStore } from '@/stores/crisisCenter'
 import { ChevronLeft, ChevronRight, Plus, Flame, BarChart3, Layers, Target, Gift, BookOpen, Sparkles, RefreshCw } from 'lucide-vue-next'
 import MoodModal from '@/components/MoodModal.vue'
 
@@ -11,6 +12,7 @@ const moodStore = useMoodStore()
 const achievementStore = useAchievementStore()
 const retrospectiveStore = useRetrospectiveStore()
 const notificationStore = useNotificationStore()
+const crisisStore = useCrisisCenterStore()
 
 const currentDate = ref(new Date())
 const showModal = ref(false)
@@ -123,22 +125,28 @@ async function openModal(day) {
 
 async function handleSubmit(moodData) {
   isLoading.value = true
-  
+
   const result = await moodStore.createMood(moodData)
-  
+
   isLoading.value = false
-  
+
   if (result.success) {
     if (result.data.notificationEvents && result.data.notificationEvents.length > 0) {
       notificationStore.push(result.data.notificationEvents)
     }
-    
+
+    if (result.data.crisisAnalysis) {
+      crisisStore.$patch({ analysis: result.data.crisisAnalysis })
+    } else {
+      crisisStore.fetchAnalysis()
+    }
+
     achievementStore.fetchTasks()
     achievementStore.fetchTaskStats()
     achievementStore.fetchReminders()
-    
+
     loadMoods()
-    
+
     existingMood.value = await moodStore.fetchMoodByDate(moodData.date)
     existingMood.value = existingMood.value.data
   } else {
@@ -148,12 +156,14 @@ async function handleSubmit(moodData) {
 
 async function handleDelete(deleteData) {
   const result = await moodStore.deleteMood(deleteData.date, deleteData.timeSegment)
-  
+
   if (result.success) {
     notificationStore.success('已删除该时段的心情记录')
-    
+
+    crisisStore.fetchAnalysis()
+
     loadMoods()
-    
+
     existingMood.value = await moodStore.fetchMoodByDate(deleteData.date)
     existingMood.value = existingMood.value.data
   }

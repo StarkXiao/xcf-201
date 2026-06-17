@@ -3,6 +3,7 @@ const achievementRepository = require('../repositories/achievementRepository');
 const userRepository = require('../repositories/userRepository');
 const moodRepository = require('../repositories/moodRepository');
 const notificationEvents = require('../utils/notificationEvents');
+const crisisCenterService = require('./crisisCenterService');
 
 class AchievementService {
   getTasks(userId) {
@@ -163,11 +164,11 @@ class AchievementService {
     if (!task) {
       throw new Error('任务不存在');
     }
-    
+
     const today = new Date();
-    
+
     const success = taskRepository.claimReward(userId, taskId, today);
-    
+
     if (!success) {
       const userTask = taskRepository.getUserTask(userId, taskId, today);
       if (!userTask) {
@@ -178,14 +179,26 @@ class AchievementService {
       }
       throw new Error('奖励领取失败');
     }
-    
+
     this.updateTaskAchievements(userId);
-    
-    return {
+
+    const result = {
       success: true,
       reward: task.reward,
       taskId
     };
+
+    try {
+      const crisisNotification = crisisCenterService.getCrisisNotification(userId);
+      if (crisisNotification) {
+        result.notificationEvents = [crisisNotification];
+      }
+      result.crisisAnalysis = crisisCenterService.getFullAnalysis(userId);
+    } catch (e) {
+      console.error('生成危机预警分析失败:', e);
+    }
+
+    return result;
   }
 
   updateTaskProgress(userId, taskType, amount = 1) {
