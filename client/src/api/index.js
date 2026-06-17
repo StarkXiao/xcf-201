@@ -136,6 +136,10 @@ export const companionApi = {
   completeEvent: (companionId, eventId, choiceId) => api.post(`/companions/${companionId}/events/${eventId}/complete`, { choiceId })
 }
 
+export const crisisCenterApi = {
+  getAnalysis: () => api.get('/crisis-center/analysis')
+}
+
 export const wishCommissionApi = {
   getTemplates: function(params) {
     if (params === undefined) params = {}

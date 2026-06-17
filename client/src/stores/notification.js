@@ -9,6 +9,7 @@ export const NOTIFICATION_TYPES = {
   ACHIEVEMENT_UNLOCKED: 'achievement_unlocked',
   STREAK_BROKEN: 'streak_broken',
   STREAK_CONTINUED: 'streak_continued',
+  CRISIS_ALERT: 'crisis_alert',
   ERROR: 'error',
   INFO: 'info',
   WARNING: 'warning',

@@ -4,8 +4,9 @@ import { useAuthStore } from '@/stores/auth'
 import { useNotificationStore } from '@/stores/notification'
 import { useMoodStore } from '@/stores/mood'
 import { useAchievementStore } from '@/stores/achievement'
+import { useCrisisCenterStore } from '@/stores/crisisCenter'
 import { computed, onMounted, watch } from 'vue'
-import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse, Archive, MessageCircle, Sparkles, Scroll } from 'lucide-vue-next'
+import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse, Archive, MessageCircle, Sparkles, Scroll, ShieldAlert } from 'lucide-vue-next'
 import NotificationToast from './NotificationToast.vue'
 
 const route = useRoute()
@@ -14,10 +15,12 @@ const authStore = useAuthStore()
 const notificationStore = useNotificationStore()
 const moodStore = useMoodStore()
 const achievementStore = useAchievementStore()
+const crisisStore = useCrisisCenterStore()
 
 const navItems = [
   { path: '/calendar', name: '心情日历', icon: Calendar },
   { path: '/prescription', name: '情绪处方笺', icon: HeartPulse },
+  { path: '/crisis-center', name: '危机预警', icon: ShieldAlert },
   { path: '/rooms', name: '剧情房间', icon: DoorOpen },
   { path: '/companions', name: '同行旅伴', icon: Sparkles },
   { path: '/chat', name: '陪伴对话', icon: MessageCircle },
@@ -69,6 +72,29 @@ async function checkStreakAndReminders() {
           notificationStore.addNotification(reminder.event)
         }
       })
+    }
+  } catch (e) {
+    // ignore error
+  }
+
+  try {
+    const crisisResult = await crisisStore.fetchAnalysis()
+    if (crisisResult.success && crisisResult.data) {
+      const { overallLevel, signals } = crisisResult.data
+      if (overallLevel === 'firm' || overallLevel === 'crisis') {
+        notificationStore.addNotification({
+          type: 'crisis_alert',
+          category: 'warning',
+          icon: 'shield-alert',
+          title: '情绪危机预警',
+          message: overallLevel === 'crisis'
+            ? `检测到${signals.length}个紧急预警信号，请关注情绪状态`
+            : `检测到${signals.length}个需关注信号，建议查看危机预警中心`,
+          priority: overallLevel === 'crisis' ? 'high' : 'normal',
+          duration: 6000,
+          data: { level: overallLevel, signalCount: signals.length }
+        })
+      }
     }
   } catch (e) {
     // ignore error

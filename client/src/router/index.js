@@ -84,6 +84,12 @@ const routes = [
     name: 'WishCommission',
     component: () => import('@/views/WishCommission.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/crisis-center',
+    name: 'CrisisCenter',
+    component: () => import('@/views/CrisisCenter.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

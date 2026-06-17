@@ -46,7 +46,8 @@ router.get('/', async (ctx) => {
       profile: '/api/profile/*',
       prescriptions: '/api/prescriptions/*',
       dreamCollection: '/api/dream-collection/*',
-      wishCommissions: '/api/wish-commissions/*'
+      wishCommissions: '/api/wish-commissions/*',
+      crisisCenter: '/api/crisis-center/*'
     }
   };
 });
@@ -67,6 +68,7 @@ const prescriptionRoutes = require('./src/routes/emotionPrescriptions');
 const dreamCollectionRoutes = require('./src/routes/dreamCollections');
 const companionRoutes = require('./src/routes/companions');
 const wishCommissionRoutes = require('./src/routes/wishCommissions');
+const crisisCenterRoutes = require('./src/routes/crisisCenter');
 
 const publicRouter = new Router();
 publicRouter.get('/api/auth/login', async (ctx) => {
@@ -108,6 +110,8 @@ app.use(companionRoutes.routes());
 app.use(companionRoutes.allowedMethods());
 app.use(wishCommissionRoutes.routes());
 app.use(wishCommissionRoutes.allowedMethods());
+app.use(crisisCenterRoutes.routes());
+app.use(crisisCenterRoutes.allowedMethods());
 
 app.listen(PORT, () => {
   console.log(`

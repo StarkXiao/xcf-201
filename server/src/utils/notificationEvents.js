@@ -6,6 +6,7 @@ const EVENT_TYPES = {
   ACHIEVEMENT_UNLOCKED: 'achievement_unlocked',
   STREAK_BROKEN: 'streak_broken',
   STREAK_CONTINUED: 'streak_continued',
+  CRISIS_ALERT: 'crisis_alert',
   ERROR: 'error',
   INFO: 'info'
 }
@@ -18,6 +19,7 @@ const EVENT_CATEGORIES = {
   [EVENT_TYPES.ACHIEVEMENT_UNLOCKED]: 'success',
   [EVENT_TYPES.STREAK_BROKEN]: 'warning',
   [EVENT_TYPES.STREAK_CONTINUED]: 'success',
+  [EVENT_TYPES.CRISIS_ALERT]: 'warning',
   [EVENT_TYPES.ERROR]: 'error',
   [EVENT_TYPES.INFO]: 'info'
 }
@@ -30,6 +32,7 @@ const EVENT_ICONS = {
   [EVENT_TYPES.ACHIEVEMENT_UNLOCKED]: 'trophy',
   [EVENT_TYPES.STREAK_BROKEN]: 'flame',
   [EVENT_TYPES.STREAK_CONTINUED]: 'flame',
+  [EVENT_TYPES.CRISIS_ALERT]: 'shield-alert',
   [EVENT_TYPES.ERROR]: 'alert',
   [EVENT_TYPES.INFO]: 'info'
 }
@@ -149,6 +152,25 @@ function createStreakContinuedEvent(streakDays) {
   )
 }
 
+function createCrisisAlertEvent(level, signalCount) {
+  const levelLabels = {
+    gentle: '轻微关注',
+    firm: '需要关注',
+    crisis: '紧急关注'
+  }
+  return createEvent(
+    EVENT_TYPES.CRISIS_ALERT,
+    { level, signalCount },
+    {
+      title: '情绪危机预警',
+      message: `检测到${signalCount}个预警信号，当前状态：${levelLabels[level] || level}，请前往危机预警中心查看`,
+      category: 'warning',
+      priority: level === 'crisis' ? 'high' : 'normal',
+      duration: 6000
+    }
+  )
+}
+
 function createBatchEventsFromMoodResult(result) {
   const events = []
 
@@ -191,5 +213,6 @@ module.exports = {
   createAchievementUnlockedEvent,
   createStreakBrokenEvent,
   createStreakContinuedEvent,
+  createCrisisAlertEvent,
   createBatchEventsFromMoodResult
 }
