@@ -314,3 +314,113 @@ CREATE INDEX IF NOT EXISTS idx_collection_goals_user_id ON collection_goals(user
 CREATE INDEX IF NOT EXISTS idx_collection_goals_type ON collection_goals(user_id, goal_type);
 CREATE INDEX IF NOT EXISTS idx_emotion_stage_archives_user_id ON emotion_stage_archives(user_id);
 CREATE INDEX IF NOT EXISTS idx_emotion_stage_archives_period ON emotion_stage_archives(user_id, archive_type);
+
+-- 同行旅伴系统 - 旅伴模板表
+CREATE TABLE IF NOT EXISTS companion_templates (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  name VARCHAR(100) NOT NULL,
+  personality TEXT NOT NULL,
+  appearance TEXT,
+  background_story TEXT,
+  traits TEXT,
+  avatar VARCHAR(255),
+  base_stats TEXT,
+  unlock_condition TEXT,
+  is_default BOOLEAN DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 同行旅伴系统 - 用户旅伴表
+CREATE TABLE IF NOT EXISTS user_companions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  companion_template_id INTEGER NOT NULL,
+  name VARCHAR(100) NOT NULL,
+  level INTEGER DEFAULT 1,
+  experience INTEGER DEFAULT 0,
+  intimacy INTEGER DEFAULT 0,
+  stats TEXT,
+  personality TEXT,
+  current_mood VARCHAR(20) DEFAULT 'neutral',
+  is_active BOOLEAN DEFAULT 0,
+  unlocked_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  last_interaction_at DATETIME,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (companion_template_id) REFERENCES companion_templates(id),
+  UNIQUE(user_id, companion_template_id)
+);
+
+-- 同行旅伴系统 - 旅伴对话表
+CREATE TABLE IF NOT EXISTS companion_conversations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  companion_id INTEGER NOT NULL,
+  message_type VARCHAR(20) NOT NULL DEFAULT 'text',
+  sender_role VARCHAR(20) NOT NULL,
+  content TEXT NOT NULL,
+  context TEXT,
+  emotion_trigger TEXT,
+  intimacy_change INTEGER DEFAULT 0,
+  exp_change INTEGER DEFAULT 0,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (companion_id) REFERENCES user_companions(id)
+);
+
+-- 同行旅伴系统 - 旅伴事件表
+CREATE TABLE IF NOT EXISTS companion_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  companion_template_id INTEGER,
+  event_type VARCHAR(50) NOT NULL,
+  trigger_condition TEXT,
+  title VARCHAR(200) NOT NULL,
+  description TEXT,
+  content TEXT,
+  choices TEXT,
+  rewards TEXT,
+  required_intimacy INTEGER DEFAULT 0,
+  required_level INTEGER DEFAULT 0,
+  is_unique BOOLEAN DEFAULT 0,
+  sort_order INTEGER DEFAULT 0,
+  FOREIGN KEY (companion_template_id) REFERENCES companion_templates(id)
+);
+
+-- 同行旅伴系统 - 用户事件记录表
+CREATE TABLE IF NOT EXISTS user_companion_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  companion_id INTEGER NOT NULL,
+  event_id INTEGER NOT NULL,
+  choice_made TEXT,
+  reward_claimed BOOLEAN DEFAULT 0,
+  completed_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (companion_id) REFERENCES user_companions(id),
+  FOREIGN KEY (event_id) REFERENCES companion_events(id),
+  UNIQUE(user_id, companion_id, event_id)
+);
+
+-- 同行旅伴系统 - 旅伴成长日志表
+CREATE TABLE IF NOT EXISTS companion_growth_logs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  companion_id INTEGER NOT NULL,
+  action_type VARCHAR(50) NOT NULL,
+  action_detail TEXT,
+  exp_change INTEGER DEFAULT 0,
+  intimacy_change INTEGER DEFAULT 0,
+  source_type VARCHAR(50),
+  source_id INTEGER,
+  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  FOREIGN KEY (user_id) REFERENCES users(id),
+  FOREIGN KEY (companion_id) REFERENCES user_companions(id)
+);
+
+-- 创建同行旅伴系统索引
+CREATE INDEX IF NOT EXISTS idx_user_companions_user_id ON user_companions(user_id);
+CREATE INDEX IF NOT EXISTS idx_user_companions_active ON user_companions(user_id, is_active);
+CREATE INDEX IF NOT EXISTS idx_companion_conversations_user ON companion_conversations(user_id, companion_id);
+CREATE INDEX IF NOT EXISTS idx_companion_conversations_created ON companion_conversations(created_at);
+CREATE INDEX IF NOT EXISTS idx_companion_events_template ON companion_events(companion_template_id);
+CREATE INDEX IF NOT EXISTS idx_user_companion_events_user ON user_companion_events(user_id, companion_id);
+CREATE INDEX IF NOT EXISTS idx_companion_growth_logs_user ON companion_growth_logs(user_id, companion_id);

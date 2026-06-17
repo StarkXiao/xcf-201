@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { achievementApi } from '@/api'
+import { useCompanionStore } from './companion'
 
 export const useAchievementStore = defineStore('achievement', () => {
   const tasks = ref({
@@ -35,6 +36,8 @@ export const useAchievementStore = defineStore('achievement', () => {
     try {
       const response = await achievementApi.claimTask(taskId)
       if (response.code === 200) {
+        const companionStore = useCompanionStore()
+        companionStore.addExperienceFromAction('task_complete', taskId)
         return { success: true, data: response.data }
       }
       return { success: false, message: response.message }

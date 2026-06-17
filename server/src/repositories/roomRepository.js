@@ -1,5 +1,7 @@
 const db = require('../config/database');
 
+module.exports.db = db;
+
 class RoomRepository {
   findAll(userId) {
     const stmt = db.prepare(`

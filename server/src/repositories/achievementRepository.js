@@ -1,5 +1,7 @@
 const db = require('../config/database');
 
+module.exports.db = db;
+
 class AchievementRepository {
   findAll() {
     const stmt = db.prepare(`SELECT * FROM achievements ORDER BY id`);

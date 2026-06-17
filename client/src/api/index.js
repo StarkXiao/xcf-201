@@ -120,4 +120,20 @@ export const dreamCollectionApi = {
   deleteGoal: (id) => api.delete(`/dream-collection/goals/${id}`)
 }
 
+export const companionApi = {
+  getCompanions: () => api.get('/companions'),
+  getActiveCompanion: () => api.get('/companions/active'),
+  getCompanionDetail: (id) => api.get(`/companions/${id}`),
+  activateCompanion: (id) => api.post(`/companions/${id}/activate`),
+  unlockCompanion: (templateId, customName) => api.post(`/companions/unlock/${templateId}`, { customName }),
+  checkUnlock: () => api.get('/companions/check/unlock'),
+  getConversations: (companionId, limit = 50, offset = 0) => api.get(`/companions/${companionId}/conversations`, { params: { limit, offset } }),
+  sendMessage: (companionId, content, context) => api.post(`/companions/${companionId}/conversations`, { content, context }),
+  clearConversations: (companionId) => api.delete(`/companions/${companionId}/conversations`),
+  sendGreeting: (companionId, type) => api.post(`/companions/${companionId}/greeting`, { type }),
+  getEvents: (companionId, type = 'available') => api.get(`/companions/${companionId}/events`, { params: { type } }),
+  triggerEvent: (companionId, eventId) => api.get(`/companions/${companionId}/events/${eventId}/trigger`),
+  completeEvent: (companionId, eventId, choiceId) => api.post(`/companions/${companionId}/events/${eventId}/complete`, { choiceId })
+}
+
 export default api

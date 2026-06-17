@@ -1,5 +1,7 @@
 const db = require('../config/database');
 
+module.exports.db = db;
+
 class UserRepository {
   create(username, email, passwordHash) {
     const stmt = db.prepare(`

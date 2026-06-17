@@ -60,6 +60,24 @@ const routes = [
     name: 'DreamCollection',
     component: () => import('@/views/DreamCollection.vue'),
     meta: { requiresAuth: true }
+  },
+  {
+    path: '/companions',
+    name: 'Companions',
+    component: () => import('@/views/Companions.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/companions/:id',
+    name: 'CompanionDetail',
+    component: () => import('@/views/CompanionDetail.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/chat',
+    name: 'Chat',
+    component: () => import('@/views/Chat.vue'),
+    meta: { requiresAuth: true }
   }
 ]
 

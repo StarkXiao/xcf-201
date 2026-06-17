@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import { retrospectiveApi } from '@/api'
+import { useCompanionStore } from './companion'
 
 export const useRetrospectiveStore = defineStore('retrospective', () => {
   const retrospectives = ref([])
@@ -52,6 +53,8 @@ export const useRetrospectiveStore = defineStore('retrospective', () => {
     try {
       const response = await retrospectiveApi.createRetrospective(data)
       if (response.code === 200) {
+        const companionStore = useCompanionStore()
+        companionStore.addExperienceFromAction('retrospective', response.data?.id)
         return { success: true, data: response.data }
       }
       return { success: false, message: response.message }

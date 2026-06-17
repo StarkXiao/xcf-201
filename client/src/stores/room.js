@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { roomApi } from '@/api'
+import { useCompanionStore } from './companion'
 
 export const useRoomStore = defineStore('room', () => {
   const rooms = ref([])
@@ -64,6 +65,8 @@ export const useRoomStore = defineStore('room', () => {
     try {
       const response = await roomApi.readChapter(roomId, chapterNumber, branch)
       if (response.code === 200) {
+        const companionStore = useCompanionStore()
+        companionStore.addExperienceFromAction('chapter_read', response.data?.storyId)
         return { success: true, data: response.data }
       }
       return { success: false, message: response.message }
@@ -137,6 +140,8 @@ export const useRoomStore = defineStore('room', () => {
         if (response.data.note) {
           currentNote.value = response.data.note
         }
+        const companionStore = useCompanionStore()
+        companionStore.addExperienceFromAction('chapter_note', response.data?.note?.id)
         return { success: true, data: response.data }
       }
       return { success: false, message: response.message }

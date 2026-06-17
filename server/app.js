@@ -64,6 +64,7 @@ const achievementRoutes = require('./src/routes/achievements');
 const retrospectiveRoutes = require('./src/routes/retrospectives');
 const prescriptionRoutes = require('./src/routes/emotionPrescriptions');
 const dreamCollectionRoutes = require('./src/routes/dreamCollections');
+const companionRoutes = require('./src/routes/companions');
 
 const publicRouter = new Router();
 publicRouter.get('/api/auth/login', async (ctx) => {
@@ -101,6 +102,8 @@ app.use(prescriptionRoutes.routes());
 app.use(prescriptionRoutes.allowedMethods());
 app.use(dreamCollectionRoutes.routes());
 app.use(dreamCollectionRoutes.allowedMethods());
+app.use(companionRoutes.routes());
+app.use(companionRoutes.allowedMethods());
 
 app.listen(PORT, () => {
   console.log(`

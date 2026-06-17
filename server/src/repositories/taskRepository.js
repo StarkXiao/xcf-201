@@ -1,5 +1,7 @@
 const db = require('../config/database');
 
+module.exports.db = db;
+
 class TaskRepository {
   findAll() {
     const stmt = db.prepare(`SELECT * FROM tasks ORDER BY id`);

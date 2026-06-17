@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { moodApi } from '@/api'
+import { useCompanionStore } from './companion'
 
 export const useMoodStore = defineStore('mood', () => {
   const moods = ref([])
@@ -54,6 +55,8 @@ export const useMoodStore = defineStore('mood', () => {
     try {
       const response = await moodApi.createMood(moodData)
       if (response.code === 200) {
+        const companionStore = useCompanionStore()
+        companionStore.addExperienceFromAction('mood_record', response.data?.id)
         return { success: true, data: response.data }
       }
       return { success: false, message: response.message }

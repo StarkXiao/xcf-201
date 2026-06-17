@@ -1,5 +1,7 @@
 const db = require('../config/database');
 
+module.exports.db = db;
+
 const VALID_SEGMENTS = ['morning', 'afternoon', 'evening', 'day'];
 const BACKFILL_DAYS = 7;
 
