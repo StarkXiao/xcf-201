@@ -154,6 +154,26 @@ class EmotionPrescriptionRepository {
     return results.map(r => this.formatArchive(r));
   }
 
+  findArchiveByDate(userId, date) {
+    const stmt = db.prepare(`
+      SELECT * FROM emotion_stage_archives 
+      WHERE user_id = ? AND start_date <= ? AND end_date >= ?
+      ORDER BY start_date DESC LIMIT 1
+    `);
+    const result = stmt.get(userId, date, date);
+    return this.formatArchive(result);
+  }
+
+  findAllArchivesByDate(userId, date) {
+    const stmt = db.prepare(`
+      SELECT * FROM emotion_stage_archives 
+      WHERE user_id = ? AND start_date <= ? AND end_date >= ?
+      ORDER BY start_date DESC
+    `);
+    const results = stmt.all(userId, date, date);
+    return results.map(r => this.formatArchive(r));
+  }
+
   formatPrescription(result) {
     if (!result) return null;
     

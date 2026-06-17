@@ -1,12 +1,12 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useMemoryLetterStore } from '@/stores/memoryLetter'
 import { useNotificationStore } from '@/stores/notification'
 import {
   Mail, MailOpen, Clock, CheckCircle, Send, X, Plus,
   Calendar, Heart, BookOpen, Sparkles, ChevronRight,
   Trash2, Ban, Eye, Archive, PenTool, Star,
-  Smile, Cloud, Sun, CloudRain, Wind, Lock
+  Smile, Cloud, Sun, CloudRain, Wind, Lock, Award, Target, Lightbulb
 } from 'lucide-vue-next'
 
 const memoryLetterStore = useMemoryLetterStore()
@@ -26,6 +26,12 @@ const formData = ref({
   includeMood: true,
   includeRoom: true,
   includeGrowth: true
+})
+
+const availableArchives = computed(() => memoryLetterStore.availableArchives)
+const selectedArchiveId = computed({
+  get: () => memoryLetterStore.selectedArchiveId,
+  set: (val) => memoryLetterStore.setSelectedArchive(val)
 })
 
 const moodLabels = {
@@ -159,8 +165,34 @@ function openCreateModal() {
     includeRoom: true,
     includeGrowth: true
   }
+  memoryLetterStore.setSelectedArchive(null)
   showCreateModal.value = true
+  loadAvailableArchives(todayStr)
 }
+
+async function loadAvailableArchives(date) {
+  if (!formData.value.includeGrowth || !date) return
+  try {
+    await memoryLetterStore.fetchAvailableArchives(date)
+    if (availableArchives.value && availableArchives.value.length > 0) {
+      memoryLetterStore.setSelectedArchive(availableArchives.value[0].id)
+    }
+  } catch (e) {
+    console.error('加载可用阶段总结失败:', e)
+  }
+}
+
+watch(() => formData.value.sourceDate, (newDate) => {
+  if (showCreateModal.value && newDate) {
+    loadAvailableArchives(newDate)
+  }
+})
+
+watch(() => formData.value.includeGrowth, (include) => {
+  if (showCreateModal.value && include && formData.value.sourceDate) {
+    loadAvailableArchives(formData.value.sourceDate)
+  }
+})
 
 function closeCreateModal() {
   showCreateModal.value = false
@@ -193,7 +225,8 @@ async function handleCreateLetter() {
       deliveryDate: formData.value.deliveryDate,
       includeMood: formData.value.includeMood,
       includeRoom: formData.value.includeRoom,
-      includeGrowth: formData.value.includeGrowth
+      includeGrowth: formData.value.includeGrowth,
+      archiveId: selectedArchiveId.value || null
     })
 
     if (result.success) {
@@ -556,6 +589,68 @@ onMounted(() => {
               </div>
             </div>
 
+            <div v-if="formData.includeGrowth" class="form-group">
+              <label class="form-label">
+                <Award class="label-icon" />
+                选择阶段总结
+              </label>
+              <div v-if="availableArchives && availableArchives.length > 0" class="archive-selector">
+                <label
+                  v-for="archive in availableArchives"
+                  :key="archive.id"
+                  class="archive-card"
+                  :class="{ selected: selectedArchiveId === archive.id }"
+                  @click="selectedArchiveId = archive.id"
+                >
+                  <input
+                    type="radio"
+                    :value="archive.id"
+                    v-model="selectedArchiveId"
+                    style="display:none"
+                  />
+                  <div class="archive-header">
+                    <span class="archive-type">
+                      {{ archive.archiveType === 'monthly' ? '月度总结' : (archive.archiveType === 'weekly' ? '周度总结' : '阶段总结') }}
+                    </span>
+                    <span class="archive-period">{{ archive.periodLabel }}</span>
+                  </div>
+                  <h4 class="archive-title">{{ archive.title }}</h4>
+                  <div class="archive-meta">
+                    <span class="archive-date">{{ archive.startDate }} ~ {{ archive.endDate }}</span>
+                    <span class="archive-stats">
+                      <Heart class="mini-icon" /> {{ archive.totalMoodRecords || 0 }}
+                      <BookOpen class="mini-icon" /> {{ archive.totalChaptersRead || 0 }}
+                      <Target class="mini-icon" /> {{ archive.totalTasksCompleted || 0 }}
+                    </span>
+                  </div>
+                  <div v-if="selectedArchiveId === archive.id" class="selected-badge">
+                    <CheckCircle class="badge-icon" /> 已选择
+                  </div>
+                </label>
+                <label
+                  class="archive-card"
+                  :class="{ selected: !selectedArchiveId }"
+                  @click="selectedArchiveId = null"
+                >
+                  <div class="archive-header">
+                    <span class="archive-type">不包含阶段总结</span>
+                  </div>
+                  <h4 class="archive-title">仅包含当日成长回顾</h4>
+                  <div class="archive-meta">
+                    <span class="archive-date">只打包来源日期当天的个人反思</span>
+                  </div>
+                  <div v-if="!selectedArchiveId" class="selected-badge">
+                    <CheckCircle class="badge-icon" /> 已选择
+                  </div>
+                </label>
+              </div>
+              <div v-else class="empty-archives">
+                <Lightbulb class="empty-icon" />
+                <p>当前日期暂无可用的阶段总结</p>
+                <p class="sub-text">将仅包含当日的成长回顾内容</p>
+              </div>
+            </div>
+
             <div class="form-group">
               <label class="form-label">信件内容</label>
               <textarea
@@ -696,12 +791,94 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div v-if="selectedLetter.growthSnapshot && selectedLetter.growthSnapshot.retrospectives?.length > 0" class="snapshot-section">
+              <div v-if="selectedLetter.growthSnapshot" class="snapshot-section">
                 <h3 class="snapshot-title">
                   <Sparkles class="snapshot-icon" />
                   成长回顾
                 </h3>
-                <div class="growth-snapshot">
+
+                <div v-if="selectedLetter.growthSnapshot.stageArchive" class="stage-archive-section">
+                  <div class="stage-archive-header">
+                    <div class="stage-archive-title-row">
+                      <Award class="archive-title-icon" />
+                      <h4 class="stage-archive-name">{{ selectedLetter.growthSnapshot.stageArchive.title || selectedLetter.growthSnapshot.stageArchive.periodLabel }}</h4>
+                      <span class="stage-archive-type">
+                        {{ selectedLetter.growthSnapshot.stageArchive.archiveType === 'monthly' ? '月度' : (selectedLetter.growthSnapshot.stageArchive.archiveType === 'weekly' ? '周度' : '阶段') }}
+                      </span>
+                    </div>
+                    <div class="stage-archive-period">
+                      <Calendar class="mini-icon" />
+                      {{ selectedLetter.growthSnapshot.stageArchive.startDate }} ~ {{ selectedLetter.growthSnapshot.stageArchive.endDate }}
+                    </div>
+                  </div>
+
+                  <div class="stage-archive-stats">
+                    <div class="stat-item">
+                      <Heart class="stat-item-icon mood" />
+                      <span class="stat-item-label">情绪记录</span>
+                      <span class="stat-item-value">{{ selectedLetter.growthSnapshot.stageArchive.totalMoodRecords || 0 }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <BookOpen class="stat-item-icon room" />
+                      <span class="stat-item-label">阅读章节</span>
+                      <span class="stat-item-value">{{ selectedLetter.growthSnapshot.stageArchive.totalChaptersRead || 0 }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <Target class="stat-item-icon task" />
+                      <span class="stat-item-label">完成任务</span>
+                      <span class="stat-item-value">{{ selectedLetter.growthSnapshot.stageArchive.totalTasksCompleted || 0 }}</span>
+                    </div>
+                    <div class="stat-item">
+                      <Star class="stat-item-icon score" />
+                      <span class="stat-item-label">平均情绪</span>
+                      <span class="stat-item-value">{{ (selectedLetter.growthSnapshot.stageArchive.avgMoodScore || 0).toFixed(1) }}</span>
+                    </div>
+                  </div>
+
+                  <div v-if="selectedLetter.growthSnapshot.stageArchive.growthInsights && selectedLetter.growthSnapshot.stageArchive.growthInsights.length > 0" class="stage-subsection">
+                    <h5 class="subsection-title">
+                      <Lightbulb class="subsection-icon" />
+                      成长洞察
+                    </h5>
+                    <div class="insights-list">
+                      <div
+                        v-for="(insight, idx) in selectedLetter.growthSnapshot.stageArchive.growthInsights"
+                        :key="idx"
+                        class="insight-item"
+                      >
+                        <span class="insight-num">{{ idx + 1 }}</span>
+                        <p class="insight-text">
+                          {{ typeof insight === 'string' ? insight : (insight.text || insight.content || JSON.stringify(insight)) }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div v-if="selectedLetter.growthSnapshot.stageArchive.taskAccomplishments && selectedLetter.growthSnapshot.stageArchive.taskAccomplishments.length > 0" class="stage-subsection">
+                    <h5 class="subsection-title">
+                      <Target class="subsection-icon" />
+                      阶段成就
+                    </h5>
+                    <div class="accomplishments-list">
+                      <div
+                        v-for="(task, idx) in selectedLetter.growthSnapshot.stageArchive.taskAccomplishments"
+                        :key="idx"
+                        class="accomplishment-item"
+                      >
+                        <CheckCircle class="accomplishment-check" />
+                        <span class="accomplishment-text">
+                          {{ typeof task === 'string' ? task : (task.title || task.name || JSON.stringify(task)) }}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-if="selectedLetter.growthSnapshot.retrospectives && selectedLetter.growthSnapshot.retrospectives.length > 0" class="growth-snapshot">
+                  <h5 class="subsection-title daily-title">
+                    <Sparkles class="subsection-icon" />
+                    当日成长回顾
+                  </h5>
                   <div
                     v-for="retro in selectedLetter.growthSnapshot.retrospectives"
                     :key="retro.id"
@@ -1852,5 +2029,320 @@ onMounted(() => {
   .modal-footer {
     padding: 14px 20px;
   }
+}
+
+.archive-selector {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.archive-card {
+  position: relative;
+  padding: 16px;
+  background: var(--color-bg);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all 0.25s ease;
+
+  &:hover {
+    border-color: var(--color-secondary);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(168, 85, 247, 0.12);
+  }
+
+  &.selected {
+    border-color: var(--color-secondary);
+    background: linear-gradient(135deg, rgba(168, 85, 247, 0.08), rgba(236, 72, 153, 0.05));
+    box-shadow: 0 4px 16px rgba(168, 85, 247, 0.18);
+  }
+}
+
+.archive-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.archive-type {
+  padding: 3px 10px;
+  background: rgba(168, 85, 247, 0.15);
+  color: var(--color-secondary);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.archive-period {
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+}
+
+.archive-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--color-text);
+  margin: 0 0 10px 0;
+  line-height: 1.4;
+}
+
+.archive-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.archive-date {
+  font-size: 0.825rem;
+  color: var(--color-text-secondary);
+}
+
+.archive-stats {
+  display: flex;
+  gap: 12px;
+  font-size: 0.8rem;
+  color: var(--color-text-tertiary);
+  align-items: center;
+}
+
+.mini-icon {
+  width: 14px;
+  height: 14px;
+  vertical-align: sub;
+  margin-right: 3px;
+}
+
+.selected-badge {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(168, 85, 247, 0.3);
+  color: var(--color-secondary);
+  font-size: 0.825rem;
+  font-weight: 600;
+
+  .badge-icon {
+    width: 15px;
+    height: 15px;
+  }
+}
+
+.empty-archives {
+  padding: 24px;
+  background: var(--color-bg);
+  border-radius: var(--radius-lg);
+  text-align: center;
+  color: var(--color-text-secondary);
+
+  .empty-icon {
+    width: 36px;
+    height: 36px;
+    color: var(--color-text-tertiary);
+    margin-bottom: 10px;
+  }
+
+  p {
+    margin: 4px 0;
+  }
+
+  .sub-text {
+    font-size: 0.85rem;
+    color: var(--color-text-tertiary);
+  }
+}
+
+.stage-archive-section {
+  padding: 18px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.06), rgba(59, 130, 246, 0.04));
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(168, 85, 247, 0.15);
+  margin-bottom: 18px;
+}
+
+.stage-archive-header {
+  padding-bottom: 14px;
+  margin-bottom: 16px;
+  border-bottom: 1px dashed rgba(168, 85, 247, 0.25);
+}
+
+.stage-archive-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+.archive-title-icon {
+  width: 22px;
+  height: 22px;
+  color: var(--color-secondary);
+}
+
+.stage-archive-name {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.stage-archive-type {
+  padding: 2px 10px;
+  background: rgba(168, 85, 247, 0.15);
+  color: var(--color-secondary);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.stage-archive-period {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: var(--color-text-secondary);
+
+  .mini-icon {
+    width: 15px;
+    height: 15px;
+    color: var(--color-text-tertiary);
+    margin: 0;
+  }
+}
+
+.stage-archive-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  margin-bottom: 18px;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: var(--radius-md);
+  flex-wrap: wrap;
+}
+
+.stat-item-icon {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+
+  &.mood { color: #F472B6; }
+  &.room { color: #60A5FA; }
+  &.task { color: #34D399; }
+  &.score { color: #FBBF24; }
+}
+
+.stat-item-label {
+  font-size: 0.8rem;
+  color: var(--color-text-secondary);
+  flex: 1;
+}
+
+.stat-item-value {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.stage-subsection {
+  margin-top: 16px;
+
+  & + & {
+    margin-top: 14px;
+  }
+}
+
+.subsection-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px 0;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--color-text);
+
+  .subsection-icon {
+    width: 17px;
+    height: 17px;
+    color: var(--color-secondary);
+  }
+
+  &.daily-title {
+    padding-top: 16px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.08);
+  }
+}
+
+.insights-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.insight-item {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: var(--radius-md);
+}
+
+.insight-num {
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(168, 85, 247, 0.18);
+  color: var(--color-secondary);
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.insight-text {
+  margin: 0;
+  font-size: 0.875rem;
+  line-height: 1.6;
+  color: var(--color-text);
+}
+
+.accomplishments-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.accomplishment-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(52, 211, 153, 0.06);
+  border-radius: var(--radius-md);
+}
+
+.accomplishment-check {
+  width: 18px;
+  height: 18px;
+  color: var(--color-success);
+  flex-shrink: 0;
+}
+
+.accomplishment-text {
+  font-size: 0.875rem;
+  color: var(--color-text);
 }
 </style>

@@ -79,7 +79,8 @@ router.post('/', async (ctx) => {
     deliveryDate,
     includeMood,
     includeRoom,
-    includeGrowth
+    includeGrowth,
+    archiveId
   } = ctx.request.body;
   
   const result = memoryLetterService.createLetter(user.userId, {
@@ -89,7 +90,8 @@ router.post('/', async (ctx) => {
     deliveryDate,
     includeMood,
     includeRoom,
-    includeGrowth
+    includeGrowth,
+    archiveId
   });
   
   ctx.body = {
@@ -198,6 +200,19 @@ router.get('/source-dates/available', async (ctx) => {
     code: 200,
     message: 'success',
     data: dates
+  };
+});
+
+router.get('/snapshot/growth/archives/:date', async (ctx) => {
+  const user = getCurrentUser(ctx);
+  const { date } = ctx.params;
+  
+  const archives = memoryLetterService.getAvailableArchivesForDate(user.userId, date);
+  
+  ctx.body = {
+    code: 200,
+    message: 'success',
+    data: archives
   };
 });
 

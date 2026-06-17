@@ -6,7 +6,7 @@ import { useMoodStore } from '@/stores/mood'
 import { useAchievementStore } from '@/stores/achievement'
 import { useCrisisCenterStore } from '@/stores/crisisCenter'
 import { useMemoryLetterStore } from '@/stores/memoryLetter'
-import { computed, onMounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import { Calendar, DoorOpen, Trophy, User, LogOut, Moon, HeartPulse, Archive, MessageCircle, Sparkles, Scroll, ShieldAlert, Mail } from 'lucide-vue-next'
 import NotificationToast from './NotificationToast.vue'
 
@@ -113,18 +113,76 @@ async function checkStreakAndReminders() {
   } catch (e) {
     // ignore error
   }
+
+  try {
+    await notificationStore.fetchUnread()
+  } catch (e) {
+    // ignore error
+  }
+}
+
+let pollTimer = null
+
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(() => {
+    if (authStore.isAuthenticated && document.visibilityState === 'visible') {
+      notificationStore.fetchUnreadCount().catch(() => {})
+    }
+  }, 60 * 1000)
+}
+
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+function handleOnline() {
+  if (authStore.isAuthenticated) {
+    checkStreakAndReminders()
+  }
+}
+
+function handleVisibilityChange() {
+  if (document.visibilityState === 'visible' && authStore.isAuthenticated) {
+    checkStreakAndReminders()
+  }
 }
 
 onMounted(() => {
   if (authStore.isAuthenticated) {
     checkStreakAndReminders()
+    startPolling()
   }
+
+  window.addEventListener('online', handleOnline)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
 })
 
 watch(() => authStore.isAuthenticated, (isAuth) => {
   if (isAuth) {
     setTimeout(checkStreakAndReminders, 500)
+    startPolling()
+  } else {
+    stopPolling()
   }
+})
+
+watch(() => route.path, (newPath, oldPath) => {
+  if (authStore.isAuthenticated && newPath !== oldPath && !['/login', '/register'].includes(newPath)) {
+    setTimeout(() => {
+      memoryLetterStore.checkDeliver().catch(() => {})
+      notificationStore.fetchUnreadCount().catch(() => {})
+    }, 300)
+  }
+})
+
+onUnmounted(() => {
+  stopPolling()
+  window.removeEventListener('online', handleOnline)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 </script>
 

@@ -15,6 +15,8 @@ export const useMemoryLetterStore = defineStore('memoryLetter', () => {
   const config = ref(null)
   const upcomingLetters = ref([])
   const availableDates = ref([])
+  const availableArchives = ref([])
+  const selectedArchiveId = ref(null)
   const moodSnapshot = ref(null)
   const roomSnapshot = ref(null)
   const growthSnapshot = ref(null)
@@ -219,11 +221,30 @@ export const useMemoryLetterStore = defineStore('memoryLetter', () => {
     }
   }
 
+  async function fetchAvailableArchives(date) {
+    try {
+      const response = await memoryLetterApi.getAvailableArchives(date)
+      if (response.code === 200) {
+        availableArchives.value = response.data
+        return { success: true, data: response.data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.response?.data?.message || '获取可用阶段总结失败' }
+    }
+  }
+
+  function setSelectedArchive(id) {
+    selectedArchiveId.value = id
+  }
+
   function clearCurrentLetter() {
     currentLetter.value = null
     moodSnapshot.value = null
     roomSnapshot.value = null
     growthSnapshot.value = null
+    availableArchives.value = []
+    selectedArchiveId.value = null
   }
 
   return {
@@ -237,6 +258,8 @@ export const useMemoryLetterStore = defineStore('memoryLetter', () => {
     config,
     upcomingLetters,
     availableDates,
+    availableArchives,
+    selectedArchiveId,
     moodSnapshot,
     roomSnapshot,
     growthSnapshot,
@@ -254,6 +277,8 @@ export const useMemoryLetterStore = defineStore('memoryLetter', () => {
     fetchRoomSnapshot,
     fetchGrowthSnapshot,
     fetchAvailableDates,
+    fetchAvailableArchives,
+    setSelectedArchive,
     clearCurrentLetter
   }
 })

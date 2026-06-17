@@ -154,7 +154,18 @@ export const memoryLetterApi = {
   getMoodSnapshot: (date) => api.get(`/memory-letters/snapshot/mood/${date}`),
   getRoomSnapshot: (date) => api.get(`/memory-letters/snapshot/room/${date}`),
   getGrowthSnapshot: (date) => api.get(`/memory-letters/snapshot/growth/${date}`),
-  getAvailableDates: () => api.get('/memory-letters/source-dates/available')
+  getAvailableDates: () => api.get('/memory-letters/source-dates/available'),
+  getAvailableArchives: (date) => api.get(`/memory-letters/snapshot/growth/archives/${date}`)
+}
+
+export const notificationApi = {
+  getUnread: (limit) => api.get('/notifications/unread', { params: { limit } }),
+  getAll: (params = {}) => api.get('/notifications', { params }),
+  getUnreadCount: () => api.get('/notifications/unread-count'),
+  markAsRead: (id) => api.post(`/notifications/${id}/read`),
+  markAllAsRead: () => api.post('/notifications/read-all'),
+  dismiss: (id) => api.post(`/notifications/${id}/dismiss`),
+  clearOld: (days) => api.delete('/notifications/old', { params: { days } })
 }
 
 export const wishCommissionApi = {

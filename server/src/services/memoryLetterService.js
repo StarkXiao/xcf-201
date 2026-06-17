@@ -2,9 +2,11 @@ const memoryLetterRepository = require('../repositories/memoryLetterRepository')
 const moodRepository = require('../repositories/moodRepository');
 const roomRepository = require('../repositories/roomRepository');
 const retrospectiveRepository = require('../repositories/retrospectiveRepository');
+const prescriptionRepository = require('../repositories/emotionPrescriptionRepository');
 const userRepository = require('../repositories/userRepository');
 const achievementRepository = require('../repositories/achievementRepository');
 const achievementService = require('./achievementService');
+const notificationService = require('./notificationService');
 const notificationEvents = require('../utils/notificationEvents');
 
 const MIN_DELIVERY_DAYS = 1;
@@ -19,7 +21,8 @@ class MemoryLetterService {
       deliveryDate,
       includeMood = true,
       includeRoom = true,
-      includeGrowth = true
+      includeGrowth = true,
+      archiveId = null
     } = data;
 
     if (!title || title.trim().length === 0) {
@@ -72,7 +75,7 @@ class MemoryLetterService {
     }
 
     if (includeGrowth) {
-      growthSnapshot = this.getGrowthSnapshot(userId, sourceDate);
+      growthSnapshot = this.getGrowthSnapshot(userId, sourceDate, { archiveId });
     }
 
     const letter = memoryLetterRepository.create(userId, {
@@ -107,9 +110,14 @@ class MemoryLetterService {
     }
 
     const notificationEventsList = [];
-    notificationEventsList.push(
-      notificationEvents.createMemoryLetterCreatedEvent(letter)
-    );
+    const letterCreatedEvent = notificationEvents.createMemoryLetterCreatedEvent(letter);
+    notificationEventsList.push(letterCreatedEvent);
+
+    try {
+      notificationService.createMemoryLetterCreatedNotification(userId, letter);
+    } catch (e) {
+      console.error('持久化信件创建通知失败:', e);
+    }
 
     if (newlyUnlockedAchievements && newlyUnlockedAchievements.length > 0) {
       newlyUnlockedAchievements.forEach(achievement => {
@@ -254,13 +262,37 @@ class MemoryLetterService {
     };
   }
 
-  getGrowthSnapshot(userId, date) {
-    const retrospectives = retrospectiveRepository.findByDate(userId, date);
+  getGrowthSnapshot(userId, date, options = {}) {
+    const archive = options.archiveId
+      ? prescriptionRepository.findArchiveById(options.archiveId)
+      : prescriptionRepository.findArchiveByDate(userId, date);
 
+    const retrospectives = retrospectiveRepository.findByDate(userId, date);
     const userStats = userRepository.getStats(userId);
+
+    let stageArchive = null;
+    if (archive && archive.userId === userId) {
+      stageArchive = {
+        id: archive.id,
+        archiveType: archive.archiveType,
+        periodLabel: archive.periodLabel,
+        startDate: archive.startDate,
+        endDate: archive.endDate,
+        title: archive.title,
+        moodSummary: archive.moodSummary,
+        roomJourney: archive.roomJourney,
+        taskAccomplishments: archive.taskAccomplishments,
+        growthInsights: archive.growthInsights,
+        totalMoodRecords: archive.totalMoodRecords,
+        totalChaptersRead: archive.totalChaptersRead,
+        totalTasksCompleted: archive.totalTasksCompleted,
+        avgMoodScore: archive.avgMoodScore
+      };
+    }
 
     return {
       date,
+      stageArchive,
       retrospectives: retrospectives.map(r => ({
         id: r.id,
         type: r.retrospect_type,
@@ -276,31 +308,51 @@ class MemoryLetterService {
     };
   }
 
+  getAvailableArchivesForDate(userId, date) {
+    return prescriptionRepository.findAllArchivesByDate(userId, date);
+  }
+
   checkAndDeliverLetters(userId) {
     const today = this.getTodayString();
-    const pendingLetters = memoryLetterRepository.findAll(userId, {
-      status: 'pending'
-    });
+    const pendingLetters = userId
+      ? memoryLetterRepository.findAll(userId, { status: 'pending' })
+      : memoryLetterRepository.getPendingByDate(today);
 
     const deliveredToday = [];
     const notificationEventsList = [];
 
     for (const letter of pendingLetters) {
       if (letter.deliveryDate <= today) {
-        const success = memoryLetterRepository.deliverLetter(userId, letter.id);
+        const letterUserId = letter.userId || userId;
+        const success = memoryLetterRepository.deliverLetter(letterUserId, letter.id);
         if (success) {
-          const deliveredLetter = memoryLetterRepository.findById(userId, letter.id);
+          const deliveredLetter = memoryLetterRepository.findById(letterUserId, letter.id);
           deliveredToday.push(deliveredLetter);
-          notificationEventsList.push(
-            notificationEvents.createMemoryLetterDeliveredEvent(deliveredLetter)
-          );
+          const deliveredEvent = notificationEvents.createMemoryLetterDeliveredEvent(deliveredLetter);
+          notificationEventsList.push(deliveredEvent);
+
+          try {
+            notificationService.createMemoryLetterDeliveredNotification(letterUserId, deliveredLetter);
+          } catch (e) {
+            console.error('持久化信件投递通知失败:', e);
+          }
         }
       }
+    }
+
+    const deliveredByUser = {};
+    for (const letter of deliveredToday) {
+      const uid = letter.userId || userId;
+      if (!deliveredByUser[uid]) {
+        deliveredByUser[uid] = [];
+      }
+      deliveredByUser[uid].push(letter);
     }
 
     return {
       deliveredCount: deliveredToday.length,
       deliveredLetters: deliveredToday,
+      deliveredByUser,
       notificationEvents: notificationEventsList
     };
   }
@@ -445,17 +497,45 @@ class MemoryLetterService {
       }
     }
 
-    if (growthSnapshot && growthSnapshot.retrospectives.length > 0) {
-      content += `【成长回顾】\n`;
-      for (const retro of growthSnapshot.retrospectives) {
-        const typeLabels = {
-          feeling: '感受',
-          thought: '思考',
-          insight: '洞察',
-          gratitude: '感恩'
-        };
-        content += `✨ ${typeLabels[retro.type] || retro.type}\n`;
-        content += `${retro.content}\n\n`;
+    if (growthSnapshot) {
+      if (growthSnapshot.stageArchive) {
+        const archive = growthSnapshot.stageArchive;
+        content += `【${archive.title || archive.periodLabel} 阶段总结】\n`;
+        content += `📅 周期：${archive.startDate} ~ ${archive.endDate}\n`;
+        content += `📊 情绪记录：${archive.totalMoodRecords || 0} 条 | 平均得分：${(archive.avgMoodScore || 0).toFixed(1)}\n`;
+        content += `📖 阅读章节：${archive.totalChaptersRead || 0} 章 | 完成任务：${archive.totalTasksCompleted || 0} 个\n\n`;
+
+        if (archive.growthInsights && Array.isArray(archive.growthInsights) && archive.growthInsights.length > 0) {
+          content += `💡 成长洞察：\n`;
+          archive.growthInsights.forEach((insight, idx) => {
+            const text = typeof insight === 'string' ? insight : (insight.text || insight.content || JSON.stringify(insight));
+            content += `  ${idx + 1}. ${text}\n`;
+          });
+          content += '\n';
+        }
+
+        if (archive.taskAccomplishments && Array.isArray(archive.taskAccomplishments) && archive.taskAccomplishments.length > 0) {
+          content += `🏆 阶段成就：\n`;
+          archive.taskAccomplishments.forEach((task, idx) => {
+            const text = typeof task === 'string' ? task : (task.title || task.name || JSON.stringify(task));
+            content += `  ✅ ${text}\n`;
+          });
+          content += '\n';
+        }
+      }
+
+      if (growthSnapshot.retrospectives && growthSnapshot.retrospectives.length > 0) {
+        content += `【当日成长回顾】\n`;
+        for (const retro of growthSnapshot.retrospectives) {
+          const typeLabels = {
+            feeling: '感受',
+            thought: '思考',
+            insight: '洞察',
+            gratitude: '感恩'
+          };
+          content += `✨ ${typeLabels[retro.type] || retro.type}\n`;
+          content += `${retro.content}\n\n`;
+        }
       }
     }
 

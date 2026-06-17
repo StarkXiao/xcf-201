@@ -1,5 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { notificationApi } from '@/api'
+import { useAuthStore } from './auth'
 
 export const NOTIFICATION_TYPES = {
   MOOD_RECORDED: 'mood_recorded',
@@ -22,6 +24,8 @@ export const useNotificationStore = defineStore('notification', () => {
   const notifications = ref([])
   const maxNotifications = 5
   const defaultDuration = 4000
+
+  // 函数定义结束
 
   const sortedNotifications = computed(() => {
     const priorityOrder = { high: 0, normal: 1, low: 2 }
@@ -257,10 +261,106 @@ export const useNotificationStore = defineStore('notification', () => {
     })
   }
 
+  const unreadCount = ref(0)
+  const persistentNotifications = ref([])
+  const lastSyncAt = ref(null)
+  const shownNotificationIds = new Set()
+
+  async function fetchUnread(limit = 50) {
+    const authStore = useAuthStore()
+    if (!authStore.isAuthenticated) {
+      return { success: false, message: '未登录' }
+    }
+
+    try {
+      const response = await notificationApi.getUnread(limit)
+      if (response.code === 200) {
+        const data = response.data || {}
+        unreadCount.value = data.unreadCount || 0
+        persistentNotifications.value = data.notifications || []
+        lastSyncAt.value = new Date().toISOString()
+
+        const newEvents = (data.notifications || []).filter(n => !shownNotificationIds.has(`db_${n.id}`))
+        if (newEvents.length > 0) {
+          newEvents.forEach((n, idx) => {
+            setTimeout(() => {
+              shownNotificationIds.add(`db_${n.id}`)
+              addNotification({
+                id: n.id,
+                type: n.type,
+                category: n.category,
+                icon: n.icon,
+                title: n.title,
+                message: n.message,
+                data: n.data,
+                timestamp: n.createdAt,
+                duration: n.duration,
+                priority: n.priority
+              })
+              markAsRead(n.id).catch(() => {})
+            }, idx * 2000)
+          })
+        }
+
+        return { success: true, data }
+      }
+      return { success: false, message: response.message }
+    } catch (error) {
+      return { success: false, message: error.message || '拉取通知失败' }
+    }
+  }
+
+  async function fetchUnreadCount() {
+    const authStore = useAuthStore()
+    if (!authStore.isAuthenticated) {
+      return { success: false }
+    }
+
+    try {
+      const response = await notificationApi.getUnreadCount()
+      if (response.code === 200) {
+        unreadCount.value = response.data?.unreadCount || 0
+        return { success: true, data: response.data }
+      }
+      return { success: false }
+    } catch (error) {
+      return { success: false }
+    }
+  }
+
+  async function markAsRead(id) {
+    try {
+      const response = await notificationApi.markAsRead(id)
+      if (response.code === 200) {
+        unreadCount.value = Math.max(0, unreadCount.value - 1)
+        return { success: true }
+      }
+      return { success: false }
+    } catch (error) {
+      return { success: false }
+    }
+  }
+
+  async function markAllAsRead() {
+    try {
+      const response = await notificationApi.markAllAsRead()
+      if (response.code === 200) {
+        unreadCount.value = 0
+        return { success: true, data: response.data }
+      }
+      return { success: false }
+    } catch (error) {
+      return { success: false }
+    }
+  }
+
   return {
     notifications,
     sortedNotifications,
     maxNotifications,
+    unreadCount,
+    persistentNotifications,
+    lastSyncAt,
     addNotification,
     removeNotification,
     clearAll,
@@ -277,6 +377,10 @@ export const useNotificationStore = defineStore('notification', () => {
     streakBroken,
     streakContinued,
     memoryLetterCreated,
-    memoryLetterDelivered
+    memoryLetterDelivered,
+    fetchUnread,
+    fetchUnreadCount,
+    markAsRead,
+    markAllAsRead
   }
 })

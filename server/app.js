@@ -70,6 +70,8 @@ const companionRoutes = require('./src/routes/companions');
 const wishCommissionRoutes = require('./src/routes/wishCommissions');
 const crisisCenterRoutes = require('./src/routes/crisisCenter');
 const memoryLetterRoutes = require('./src/routes/memoryLetters');
+const notificationRoutes = require('./src/routes/notifications');
+const memoryLetterService = require('./src/services/memoryLetterService');
 
 const publicRouter = new Router();
 publicRouter.get('/api/auth/login', async (ctx) => {
@@ -115,6 +117,65 @@ app.use(crisisCenterRoutes.routes());
 app.use(crisisCenterRoutes.allowedMethods());
 app.use(memoryLetterRoutes.routes());
 app.use(memoryLetterRoutes.allowedMethods());
+app.use(notificationRoutes.routes());
+app.use(notificationRoutes.allowedMethods());
+
+const lastCheckedUsers = new Map();
+const CHECK_COOLDOWN_MS = 5 * 60 * 1000;
+
+app.use(async (ctx, next) => {
+  await next();
+
+  if (ctx.state && ctx.state.user && ctx.state.user.userId) {
+    const userId = ctx.state.user.userId;
+    const now = Date.now();
+    const lastChecked = lastCheckedUsers.get(userId) || 0;
+
+    if (now - lastChecked > CHECK_COOLDOWN_MS) {
+      lastCheckedUsers.set(userId, now);
+      try {
+        setImmediate(() => {
+          memoryLetterService.checkAndDeliverLetters(userId);
+        });
+      } catch (e) {
+        // ignore async error
+      }
+    }
+  }
+});
+
+function startScheduler() {
+  const INTERVAL_MS = 30 * 60 * 1000;
+  console.log(`[Scheduler] 信件投递定时任务已启动，每 ${INTERVAL_MS / 60000} 分钟执行一次`);
+
+  setInterval(() => {
+    try {
+      console.log(`[Scheduler] [${new Date().toLocaleString()}] 开始全局信件投递检查...`);
+      const result = memoryLetterService.checkAndDeliverLetters(null);
+      if (result.deliveredCount > 0) {
+        console.log(`[Scheduler] 本次送达 ${result.deliveredCount} 封信件，涉及用户 ${Object.keys(result.deliveredByUser).length} 人`);
+      } else {
+        console.log('[Scheduler] 本次检查无待送达信件');
+      }
+    } catch (e) {
+      console.error('[Scheduler] 全局信件投递检查出错:', e);
+    }
+  }, INTERVAL_MS);
+
+  setTimeout(() => {
+    try {
+      console.log('[Scheduler] 服务启动后首次全局信件投递检查...');
+      const result = memoryLetterService.checkAndDeliverLetters(null);
+      if (result.deliveredCount > 0) {
+        console.log(`[Scheduler] 启动检查送达 ${result.deliveredCount} 封信件`);
+      }
+    } catch (e) {
+      console.error('[Scheduler] 启动信件投递检查出错:', e);
+    }
+  }, 5000);
+}
+
+startScheduler();
 
 app.listen(PORT, () => {
   console.log(`

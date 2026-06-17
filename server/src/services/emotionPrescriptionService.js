@@ -742,6 +742,14 @@ class EmotionPrescriptionService {
     return prescriptionRepository.findAllArchives(userId, limit);
   }
 
+  getArchiveByDate(userId, date) {
+    return prescriptionRepository.findArchiveByDate(userId, date);
+  }
+
+  getAllArchivesByDate(userId, date) {
+    return prescriptionRepository.findAllArchivesByDate(userId, date);
+  }
+
   updateTaskProgress(userId) {
     const stats = prescriptionRepository.getPrescriptionStats(userId);
     if (stats && stats.viewedCount > 0) {
